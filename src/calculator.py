@@ -2,14 +2,14 @@
 
 핵심 원칙
 ---------
-1. 모든 배분은 '가중치 기반 최대잉여법(largest remainder method)'으로 통일한다.
-   - 면적     : 가중치 = 계약면적
+1. 배분은 '가중치 기반 최대잉여법(largest remainder method)'으로 통일한다.
+   - 면적     : 가중치 = 분양평수
    - 호실균등  : 가중치 = 1 (전 호실)
    - 사용량   : 가중치 = 검침 사용량
-2. 공실 포함 전체 호실에 배분한 뒤, 임차인 몫은 청구·공실 몫은 건물주 부담으로
-   분리한다. (공실 부담을 임차인에게 전가하지 않음)
-3. 원(₩) 단위 잔여를 소수부가 큰 호실부터 배분해
-   '항목별 배분 합계 = 항목 총액'이 항상 정확히 일치하도록 보장한다.
+2. 단가(rate)가 지정된 항목은 '단가 × 가중치'로 정액 산정하고 총액을 자동 계산한다.
+   (예: 일반관리비 = 평수 × 4,000원)
+3. 공실 포함 전체 호실에 배분한 뒤, 임차인 몫은 청구·공실 몫은 건물주 부담으로 나눈다.
+4. 원(₩) 단위 잔여를 소수부가 큰 호실부터 배분해 '배분 합계 = 총액'을 정확히 맞춘다.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from .models import (
     Settlement,
     Unit,
     UnitBill,
+    round_won,
 )
 
 # 호실 키 -> {항목명 -> 사용량}
@@ -60,7 +61,6 @@ def _weights_for(
     """항목의 배분방식에 따른 호실별 가중치(공실 포함)를 계산한다."""
     method = item.method
     weights: Dict[str, float] = {}
-
     for u in units:
         if method is AllocationMethod.AREA:
             weights[u.key] = u.area
@@ -70,7 +70,6 @@ def _weights_for(
             weights[u.key] = float(usage.get(u.key, {}).get(item.name, 0.0))
         else:  # pragma: no cover
             raise ValueError(f"지원하지 않는 배분방식: {method}")
-
     return weights
 
 
@@ -78,7 +77,7 @@ def settle(
     units: List[Unit],
     items: List[CostItem],
     usage: UsageTable | None = None,
-    vat_rate: float = 0.1,
+    vat_rate: float = 0.0,
 ) -> Settlement:
     """호실 / 비용항목 / 검침값을 받아 호실별 관리비를 산정한다."""
     if not units:
@@ -89,7 +88,12 @@ def settle(
 
     for item in items:
         weights = _weights_for(item, units, usage)
-        allocation = allocate(item.total, weights)
+        if item.rate is not None:
+            # 단가 방식: 단가 × 가중치 (예: 평수 × 4,000원), 총액 자동 산출
+            allocation = {k: round_won(w * item.rate) for k, w in weights.items()}
+            item.total = sum(allocation.values())
+        else:
+            allocation = allocate(item.total, weights)
         for key, amount in allocation.items():
             bills[key].charges[item.name] = amount
 

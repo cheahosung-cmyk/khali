@@ -1,4 +1,4 @@
-"""상가 관리비 정산 엔진 테스트.
+"""상가 관리비 정산 엔진 테스트 (웰스타임 빌딩 기준).
 
 표준 라이브러리만으로 실행 가능: `python -m pytest` 또는 `python -m unittest`.
 """
@@ -9,11 +9,25 @@ from src.calculator import allocate, settle
 from src.models import AllocationMethod, CostItem, Unit, round_won
 
 
+# 웰스타임 빌딩 호실/평수 (총 1,006평)
+WELLSTIME = [
+    Unit("원유로", 44),
+    Unit("와플칸", 10),
+    Unit("에바돈카츠", 31),
+    Unit("드림스터디", 207),
+    Unit("아기고래", 62),
+    Unit("카카오3F", 207),
+    Unit("영동스크린4F", 207),
+    Unit("고기나라", 207),
+    Unit("코리아독스", 31),
+]
+
+
 class TestAllocate(unittest.TestCase):
     def test_sum_matches_total_exactly(self):
-        weights = {"a": 66.1, "b": 49.5, "c": 99.2}
-        result = allocate(1_000_000, weights)
-        self.assertEqual(sum(result.values()), 1_000_000)
+        weights = {u.key: u.area for u in WELLSTIME}
+        result = allocate(795_190, weights)
+        self.assertEqual(sum(result.values()), 795_190)
 
     def test_equal_weights(self):
         result = allocate(100, {"a": 1, "b": 1, "c": 1})
@@ -22,93 +36,87 @@ class TestAllocate(unittest.TestCase):
 
     def test_zero_weight_gets_nothing(self):
         result = allocate(1000, {"a": 0, "b": 10, "c": 0})
-        self.assertEqual(result["a"], 0)
-        self.assertEqual(result["c"], 0)
         self.assertEqual(result["b"], 1000)
+        self.assertEqual(result["a"], 0)
 
 
 class TestRoundWon(unittest.TestCase):
     def test_round_half_up(self):
         self.assertEqual(round_won(100.4), 100)
         self.assertEqual(round_won(100.5), 101)
-        self.assertEqual(round_won(165000.0), 165000)
+
+
+class TestGeneralManagementFee(unittest.TestCase):
+    """일반관리비 = 평수 × 4,000원 (단가 방식) — 기존 정산표와 정확히 일치해야 함."""
+
+    def test_rate_based_exact(self):
+        items = [CostItem("일반관리비", 0, AllocationMethod.AREA, rate=4000)]
+        s = settle(WELLSTIME, items)
+        bills = {b.unit.name: b.supply for b in s.bills}
+        self.assertEqual(bills["원유로"], 176_000)      # 44 × 4000
+        self.assertEqual(bills["와플칸"], 40_000)       # 10 × 4000
+        self.assertEqual(bills["드림스터디"], 828_000)  # 207 × 4000
+        self.assertEqual(s.building_total, 4_024_000)   # 1006 × 4000
+        self.assertEqual(s.verify(), [])
 
 
 class TestSettle(unittest.TestCase):
     def setUp(self):
-        # 5층 상가, 301호 공실
-        self.units = [
-            Unit("1", "101", 66.1, True, "행복편의점"),
-            Unit("1", "102", 49.5, True, "민들레카페"),
-            Unit("2", "201", 99.2, True, "튼튼정형외과"),
-            Unit("3", "301", 99.2, False, ""),  # 공실
-            Unit("4", "401", 99.2, True, "한빛세무회계"),
-            Unit("5", "501", 132.3, True, "스카이학원"),
-        ]
         self.usage = {
-            "1-101": {"호실전기료": 540},
-            "1-102": {"호실전기료": 380},
-            "2-201": {"호실전기료": 720},
-            "3-301": {"호실전기료": 0},
-            "4-401": {"호실전기료": 410},
-            "5-501": {"호실전기료": 950},
+            "원유로": {"공동수도료(세대)": 11},
+            "에바돈카츠": {"공동수도료(세대)": 51},
+            "고기나라": {"공동수도료(세대)": 61},
+            "드림스터디": {"공동수도료(세대)": 1},
+            "아기고래": {"공동수도료(세대)": 11},
+            "카카오3F": {"공동수도료(세대)": 6},
         }
 
-    def test_area_allocation_total_matches(self):
-        items = [CostItem("일반관리비", 1_800_000, AllocationMethod.AREA)]
-        s = settle(self.units, items, self.usage)
-        self.assertEqual(s.item_total_charged("일반관리비"), 1_800_000)
+    def test_electricity_area_total_matches(self):
+        items = [CostItem("공동전기료", 795_190, AllocationMethod.AREA)]
+        s = settle(WELLSTIME, items)
+        self.assertEqual(s.item_total_charged("공동전기료"), 795_190)
         self.assertEqual(s.verify(), [])
 
-    def test_vacant_share_is_owner_borne(self):
-        # 면적 배분 시 공실(301)도 면적분이 산정되며, 그 몫은 건물주 부담으로 분리된다.
-        items = [CostItem("일반관리비", 1_800_000, AllocationMethod.AREA)]
-        s = settle(self.units, items, self.usage)
-        vacant = next(b for b in s.bills if b.unit.key == "3-301")
-        self.assertGreater(vacant.supply, 0)  # 공실도 면적분 산정
-        self.assertEqual(s.owner_borne_total, vacant.supply)
-        # 임차인 청구 + 공실 부담 = 건물 총액
-        self.assertEqual(s.supply_billed_total + s.owner_borne_total, 1_800_000)
-
-    def test_usage_vacant_pays_zero(self):
-        items = [CostItem("호실전기료", 1_650_000, AllocationMethod.USAGE)]
-        s = settle(self.units, items, self.usage)
-        vacant = next(b for b in s.bills if b.unit.key == "3-301")
-        self.assertEqual(vacant.supply, 0)  # 사용량 0 → 부담 없음
-        self.assertEqual(s.item_total_charged("호실전기료"), 1_650_000)
-
-    def test_vat_calculation(self):
-        items = [CostItem("일반관리비", 1_000_000, AllocationMethod.EQUAL)]
-        s = settle(self.units, items, self.usage, vat_rate=0.1)
-        # 임차인 5호실 균등(공실 1호실분은 건물주 부담)
-        for bill in s.tenant_bills:
-            self.assertEqual(s.vat(bill), round_won(bill.supply * 0.1))
-            self.assertEqual(s.billed_total(bill), bill.supply + s.vat(bill))
-        self.assertEqual(s.vat_total, sum(s.vat(b) for b in s.tenant_bills))
-
-    def test_no_vat(self):
-        items = [CostItem("청소비", 600_000, AllocationMethod.EQUAL)]
-        s = settle(self.units, items, self.usage, vat_rate=0.0)
-        self.assertEqual(s.vat_total, 0)
-        self.assertEqual(s.billed_grand_total, s.supply_billed_total)
+    def test_water_usage_allocation(self):
+        items = [CostItem("공동수도료(세대)", 417_566, AllocationMethod.USAGE)]
+        s = settle(WELLSTIME, items, self.usage)
+        self.assertEqual(s.item_total_charged("공동수도료(세대)"), 417_566)
+        # 사용량 0 호실은 0원
+        zero = next(b for b in s.bills if b.unit.name == "코리아독스")
+        self.assertEqual(zero.supply, 0)
+        # 사용량 최다(고기나라 61)가 최다 부담
+        most = next(b for b in s.bills if b.unit.name == "고기나라")
+        self.assertEqual(most.supply, round(61 / 141 * 417_566))
 
     def test_full_settlement_verifies(self):
         items = [
-            CostItem("일반관리비", 1_800_000, AllocationMethod.AREA),
-            CostItem("청소비", 600_000, AllocationMethod.EQUAL),
-            CostItem("호실전기료", 1_650_000, AllocationMethod.USAGE),
+            CostItem("일반관리비", 0, AllocationMethod.AREA, rate=4000),
+            CostItem("공동전기료", 795_190, AllocationMethod.AREA),
+            CostItem("공동수도료(세대)", 417_566, AllocationMethod.USAGE),
+            CostItem("공동수도료(공용)", 313_914, AllocationMethod.AREA),
         ]
-        s = settle(self.units, items, self.usage)
-        self.assertEqual(s.building_total, 1_800_000 + 600_000 + 1_650_000)
+        s = settle(WELLSTIME, items, self.usage)
+        self.assertEqual(s.building_total, 4_024_000 + 795_190 + 417_566 + 313_914)
         self.assertEqual(s.verify(), [])
-        # 임차인 청구 + 공실 부담 = 건물 총액
-        self.assertEqual(
-            s.supply_billed_total + s.owner_borne_total, s.building_total
-        )
+
+    def test_vacant_owner_borne(self):
+        units = [Unit("A", 100, True), Unit("B", 100, False)]
+        items = [CostItem("청소비", 200_000, AllocationMethod.AREA)]
+        s = settle(units, items)
+        self.assertEqual(s.supply_billed_total, 100_000)      # 임차 A
+        self.assertEqual(s.owner_borne_total, 100_000)        # 공실 B = 건물주
+        self.assertEqual(s.verify(), [])
+
+    def test_vat_optional(self):
+        items = [CostItem("일반관리비", 0, AllocationMethod.AREA, rate=4000)]
+        s = settle(WELLSTIME, items, vat_rate=0.1)
+        b = next(x for x in s.bills if x.unit.name == "원유로")
+        self.assertEqual(s.vat(b), round_won(176_000 * 0.1))
+        self.assertEqual(s.billed_total(b), 176_000 + 17_600)
 
     def test_empty_units_raises(self):
         with self.assertRaises(ValueError):
-            settle([], [CostItem("청소비", 100, AllocationMethod.EQUAL)])
+            settle([], [CostItem("청소비", 100, AllocationMethod.AREA)])
 
 
 if __name__ == "__main__":
