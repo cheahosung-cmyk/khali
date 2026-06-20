@@ -10,11 +10,12 @@ setup(
     version="0.1.0",
     author="cheahosung-cmyk",
     author_email="cheahosung@gmail.com",
-    description="AI Agent Management System",
+    description="Khali - Bithumb 자동 코인매매 시스템 (개인용)",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/cheahosung-cmyk/khali",
-    packages=find_packages(),
+    package_dir={"": "src"},
+    packages=find_packages(where="src"),
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
@@ -35,7 +36,13 @@ setup(
         "sqlalchemy>=2.0.23",
         "alembic>=1.12.1",
         "aiohttp>=3.9.1",
+        "httpx>=0.26.0",
         "python-dotenv>=1.0.0",
+        "PyJWT>=2.7.0",
+        "pandas>=2.1.0",
+        "numpy>=1.26.0",
+        "jinja2>=3.1.2",
+        "websockets>=12.0",
     ],
     extras_require={
         "dev": [
@@ -54,7 +61,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "khali=src.main:main",
+            "khali=khali.main:main",
         ],
     },
 )
