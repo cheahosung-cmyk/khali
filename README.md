@@ -94,6 +94,37 @@ CANDLE_UNIT=1440 khali backtest --all --count 5000   # 일봉
 > ⚠️ 과거 성과가 미래 수익을 보장하지 않습니다. 파라미터(`POSITION_SIZE_PCT`,
 > 손절·익절 등)와 캔들 주기를 바꿔가며 충분히 검증한 뒤 paper → live 로 진행하세요.
 
+## 파라미터 최적화
+
+`khali optimize` 는 각 전략의 파라미터 조합을 그리드 서치하고, **과최적화를
+막기 위해 학습(70%)/검증(30%) 구간을 분리**해 in-sample뿐 아니라
+out-of-sample 성과까지 함께 보여줍니다. 기본 점수는 `calmar`(수익률/MDD).
+
+```bash
+khali optimize --all                       # 모든 전략 (1h봉)
+CANDLE_UNIT=1440 khali optimize --all       # 일봉 기준
+khali optimize --strategy rsi_reversion --metric return
+```
+
+**실데이터 일봉(9년) 최적화 결과** — 학습 → 검증(미학습 구간) 일반화 성능:
+
+| 전략 | 최적 파라미터 | 학습 수익 | **검증 수익** | 검증 MDD |
+|------|------|:---:|:---:|:---:|
+| ma_crossover | `short=15, long=100` | +50.5% | **+25.1%** | 3.0% |
+| rsi_reversion | `period=14, oversold=30` | +57.5% | **+10.3%** | 8.2% |
+| volatility_breakout | `k=0.8` | +113.2% | +9.4% | 3.5% |
+
+> 변동성돌파 `k=0.8` 은 학습 +113%로 화려하지만 검증 +9.4% — 학습 구간에
+> 과최적화된 신호입니다. 반면 **`ma_crossover short=15/long=100` 이 검증 구간에서
+> +25%로 가장 안정적인 일반화 성능**을 보였습니다. 학습 성과만 보고 고르면 안 됩니다.
+
+찾은 파라미터는 `.env` 의 `STRATEGY_PARAMS`(JSON)에 넣으면 paper/live 매매에
+그대로 적용됩니다:
+```bash
+STRATEGY=ma_crossover
+STRATEGY_PARAMS={"short": 15, "long": 100}
+```
+
 ## 전략 (플러그인)
 
 | 이름 | 방식 |

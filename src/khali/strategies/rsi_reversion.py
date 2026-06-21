@@ -30,6 +30,14 @@ class RSIReversion(Strategy):
     def min_candles(self) -> int:
         return self.period + 2
 
+    @staticmethod
+    def param_grid() -> dict[str, list]:
+        return {
+            "period": [7, 14, 21],
+            "oversold": [20, 25, 30, 35],
+            "overbought": [65, 70, 75, 80],
+        }
+
     def generate_signal(self, ctx: StrategyContext) -> Signal:
         closes = [c.close for c in ctx.candles]
         value = rsi(closes, self.period)

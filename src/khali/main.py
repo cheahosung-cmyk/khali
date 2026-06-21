@@ -62,6 +62,46 @@ def cmd_backtest(args) -> None:
               f"({results[0].total_return_pct:+.2f}%)")
 
 
+def cmd_optimize(args) -> None:
+    from .backtest.optimizer import Optimizer
+    from .exchange.factory import create_client
+    from .strategies import list_strategies
+
+    settings = get_settings()
+    client = create_client(settings.api_version)
+    candles = client.get_candles(settings.market, settings.candle_unit, args.count)
+    client.close()
+    print(
+        f"\n{settings.market} {settings.candle_unit}분봉 {len(candles)}개 | "
+        f"지표={args.metric} | 학습:검증 = {int(args.train*100)}:{100-int(args.train*100)}"
+    )
+
+    names = list_strategies() if args.all else [args.strategy or settings.strategy]
+    opt = Optimizer(settings)
+    for name in names:
+        rep = opt.optimize(
+            candles, name, metric=args.metric, train_ratio=args.train
+        )
+        if rep.best is None:
+            continue
+        print(f"\n{'='*78}\n[{name}] 조합 {rep.n_combos}개 탐색 "
+              f"(학습 {rep.train_size} / 검증 {rep.test_size}봉)")
+        print(f"  {'파라미터':<34} {'학습수익':>8} {'학습MDD':>7} "
+              f"{'검증수익':>8} {'검증MDD':>7} {'거래':>4}")
+        for r in rep.top:
+            p = ", ".join(f"{k}={v}" for k, v in r.params.items()) or "(기본)"
+            print(f"  {p:<34} {r.train.total_return_pct:>7.2f}% "
+                  f"{r.train.max_drawdown_pct:>6.1f}% "
+                  f"{r.test.total_return_pct:>7.2f}% "
+                  f"{r.test.max_drawdown_pct:>6.1f}% {r.test.num_trades:>4}")
+        b = rep.best
+        bp = ", ".join(f"{k}={v}" for k, v in b.params.items()) or "(기본)"
+        gen = "✅ 견고" if b.test.total_return_pct > 0 else "⚠️ 검증구간 부진(과최적화 의심)"
+        print(f"\n  🏆 최적: {bp}")
+        print(f"     학습 {b.train.total_return_pct:+.2f}% → "
+              f"검증 {b.test.total_return_pct:+.2f}%  {gen}")
+
+
 def cmd_run(args) -> None:
     from .engine.trader import Trader
     from .storage.db import init_db
@@ -98,11 +138,24 @@ def main() -> None:
         help="사용할 캔들 개수 (API 1.0 최대 ~5000, 2.0 최대 200)",
     )
 
+    op = sub.add_parser("optimize", help="전략 파라미터 최적화 (그리드 서치)")
+    op.add_argument("--strategy", help="대상 전략 (생략 시 .env STRATEGY)")
+    op.add_argument("--all", action="store_true", help="모든 전략 최적화")
+    op.add_argument("--metric", choices=["calmar", "return"], default="calmar",
+                    help="정렬 지표 (기본 calmar: 수익률/MDD)")
+    op.add_argument("--train", type=float, default=0.7, help="학습 구간 비율")
+    op.add_argument("--count", type=int, default=5000, help="사용할 캔들 개수")
+
     sub.add_parser("run", help="헤드리스 매매 루프")
 
     args = parser.parse_args()
     command = args.command or "web"
-    {"web": cmd_web, "backtest": cmd_backtest, "run": cmd_run}[command](args)
+    {
+        "web": cmd_web,
+        "backtest": cmd_backtest,
+        "optimize": cmd_optimize,
+        "run": cmd_run,
+    }[command](args)
 
 
 if __name__ == "__main__":

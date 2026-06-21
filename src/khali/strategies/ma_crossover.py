@@ -21,6 +21,14 @@ class MACrossover(Strategy):
     def min_candles(self) -> int:
         return self.long + 2
 
+    @staticmethod
+    def param_grid() -> dict[str, list]:
+        # short < long 조합만 최적화기에서 사용됨
+        return {
+            "short": [5, 10, 15, 20],
+            "long": [20, 30, 50, 60, 100],
+        }
+
     def generate_signal(self, ctx: StrategyContext) -> Signal:
         closes = [c.close for c in ctx.candles]
         if len(closes) < self.long + 1:

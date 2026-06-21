@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     market: str = Field(default="KRW-XRP", alias="MARKET")
     base_capital_krw: float = Field(default=50000, alias="BASE_CAPITAL_KRW")
     strategy: str = Field(default="volatility_breakout", alias="STRATEGY")
+    # 최적화로 찾은 전략 파라미터 (JSON). 예: {"short": 15, "long": 100}
+    strategy_params_json: str = Field(default="", alias="STRATEGY_PARAMS")
     candle_unit: int = Field(default=60, alias="CANDLE_UNIT")
 
     # ── 리스크 관리 ──
@@ -65,6 +67,17 @@ class Settings(BaseSettings):
     # ── 텔레그램 (선택) ──
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str = Field(default="", alias="TELEGRAM_CHAT_ID")
+
+    @property
+    def strategy_params(self) -> dict:
+        if not self.strategy_params_json.strip():
+            return {}
+        import json
+
+        try:
+            return json.loads(self.strategy_params_json)
+        except json.JSONDecodeError:
+            return {}
 
     @property
     def has_api_keys(self) -> bool:

@@ -44,10 +44,13 @@ class Backtester:
         self.s = settings
 
     def run(
-        self, candles: list[Candle], strategy_name: str | None = None
+        self,
+        candles: list[Candle],
+        strategy_name: str | None = None,
+        params: dict | None = None,
     ) -> BacktestResult:
         strat_name = strategy_name or self.s.strategy
-        strategy = get_strategy(strat_name)
+        strategy = get_strategy(strat_name, **(params or {}))
         portfolio = Portfolio(cash_krw=self.s.base_capital_krw)
         order_mgr = OrderManager(OrderMode.BACKTEST, self.s.fee_rate, portfolio)
         risk = RiskManager(self.s)

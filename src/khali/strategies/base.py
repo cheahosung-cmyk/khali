@@ -54,3 +54,8 @@ class Strategy(ABC):
     def min_candles(self) -> int:
         """신호 계산에 필요한 최소 캔들 수."""
         return 50
+
+    @staticmethod
+    def param_grid() -> dict[str, list]:
+        """최적화 그리드 서치용 파라미터 후보. 기본은 빈 그리드(튜닝 없음)."""
+        return {}

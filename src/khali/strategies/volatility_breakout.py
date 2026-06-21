@@ -20,6 +20,10 @@ class VolatilityBreakout(Strategy):
     def min_candles(self) -> int:
         return 3
 
+    @staticmethod
+    def param_grid() -> dict[str, list]:
+        return {"k": [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]}
+
     def generate_signal(self, ctx: StrategyContext) -> Signal:
         if len(ctx.candles) < 2:
             return Signal(Action.HOLD, "데이터 부족")

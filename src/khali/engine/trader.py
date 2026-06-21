@@ -38,7 +38,7 @@ class Trader:
             settings.order_mode, settings.fee_rate, self.portfolio, self.client
         )
         self.risk = RiskManager(settings)
-        self.strategy = get_strategy(settings.strategy)
+        self.strategy = get_strategy(settings.strategy, **settings.strategy_params)
 
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
