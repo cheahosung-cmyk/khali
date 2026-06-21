@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from ..budget.tracker import BudgetTracker
 from .action import Action, ActionResult, ActionStatus
 from .memory import LoopMemory
 from .observer import LoopObserver
@@ -71,6 +72,7 @@ class LoopEngine:
         verifier: Verifier | None = None,
         memory: LoopMemory | None = None,
         observer: LoopObserver | None = None,
+        budget: BudgetTracker | None = None,
         poll_interval_seconds: float = 0.0,
         context: dict[str, Any] | None = None,
     ):
@@ -80,6 +82,7 @@ class LoopEngine:
         self.verifier = verifier
         self.memory = memory or LoopMemory()
         self.observer = observer or LoopObserver()
+        self.budget = budget
         self._poll_interval = poll_interval_seconds
         self._base_context: dict[str, Any] = context or {}
         self._status = LoopStatus.IDLE
@@ -135,6 +138,12 @@ class LoopEngine:
 
             self.memory.complete_iteration(iteration, action_result, verification, iter_stop_reason)
             self.observer.record(iteration, iter_stop_reason)
+            if self.budget is not None:
+                try:
+                    self.budget.record(iteration.index, action_result.cost)
+                except Exception:
+                    iter_stop_reason = iter_stop_reason or "budget exhausted by tracker"
+                    self._status = LoopStatus.STOPPED
 
             if iter_stop_reason:
                 stop_reason = iter_stop_reason
@@ -155,4 +164,6 @@ class LoopEngine:
     def _build_context(self) -> dict[str, Any]:
         ctx = dict(self._base_context)
         ctx.update(self.memory.to_context())
+        if self.budget is not None:
+            ctx.update(self.budget.to_context())
         return ctx

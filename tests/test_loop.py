@@ -3,6 +3,7 @@
 import pytest
 
 from src.loop.action import ActionResult, ActionStatus, FunctionAction
+from src.loop.builder import LoopBuilder
 from src.loop.engine import LoopEngine, LoopStatus
 from src.loop.memory import LoopMemory
 from src.loop.observer import LoopObserver
@@ -283,3 +284,77 @@ class TestLoopEngine:
 
         result = engine.run(max_wall_seconds=0.5)
         assert call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# LoopBuilder 통합 테스트
+# ---------------------------------------------------------------------------
+
+class TestLoopBuilder:
+    def test_build_fails_without_trigger(self):
+        with pytest.raises(ValueError, match="trigger"):
+            LoopBuilder().action_fn(lambda ctx: "ok").build()
+
+    def test_build_fails_without_action(self):
+        with pytest.raises(ValueError, match="action"):
+            LoopBuilder().trigger_always().build()
+
+    def test_simple_loop_via_builder(self):
+        count = [0]
+
+        def act(ctx):
+            count[0] += 1
+
+        engine = (
+            LoopBuilder()
+            .trigger_always()
+            .action_fn(act)
+            .stop_after(3)
+            .build()
+        )
+        result = engine.run()
+        assert result.iterations_run == 3
+        assert count[0] == 3
+
+    def test_budget_wired_via_builder(self):
+        engine = (
+            LoopBuilder()
+            .budget(1.0)
+            .trigger_always()
+            .action_fn(lambda ctx: ActionResult(status=ActionStatus.SUCCESS, cost=0.4))
+            .stop_after(100)
+            .build()
+        )
+        result = engine.run()
+        assert result.total_cost >= 1.0
+
+    def test_verifier_wired_via_builder(self):
+        call_count = [0]
+
+        def check(out, ctx):
+            call_count[0] += 1
+            return call_count[0] > 2
+
+        engine = (
+            LoopBuilder()
+            .trigger_always()
+            .action_fn(lambda ctx: "draft")
+            .verify_with(check)
+            .stop_after(10)
+            .build()
+        )
+        engine.run()
+        assert len(engine.memory.failed_attempts()) == 2
+
+    def test_budget_tracker_synced_with_engine(self):
+        engine = (
+            LoopBuilder()
+            .budget(2.0)
+            .trigger_always()
+            .action_fn(lambda ctx: ActionResult(status=ActionStatus.SUCCESS, cost=0.5))
+            .stop_after(10)
+            .build()
+        )
+        result = engine.run()
+        assert engine.budget is not None
+        assert engine.budget.spent == pytest.approx(result.total_cost)
