@@ -51,6 +51,9 @@ setup(
             "mkdocs>=1.5.3",
             "mkdocs-material>=9.4.14",
         ],
+        "excel": [
+            "openpyxl>=3.1.0",
+        ],
     },
     entry_points={
         "console_scripts": [
