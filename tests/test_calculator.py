@@ -18,7 +18,7 @@ WELLSTIME = [
     Unit("아기고래", 62),
     Unit("카카오3F", 207),
     Unit("영동스크린4F", 207),
-    Unit("고기나라", 207),
+    Unit("명성화로", 207),
     Unit("코리아독스", 31),
 ]
 
@@ -65,7 +65,7 @@ class TestSettle(unittest.TestCase):
         self.usage = {
             "원유로": {"공동수도료(세대)": 11},
             "에바돈카츠": {"공동수도료(세대)": 51},
-            "고기나라": {"공동수도료(세대)": 61},
+            "명성화로": {"공동수도료(세대)": 61},
             "드림스터디": {"공동수도료(세대)": 1},
             "아기고래": {"공동수도료(세대)": 11},
             "카카오3F": {"공동수도료(세대)": 6},
@@ -84,8 +84,8 @@ class TestSettle(unittest.TestCase):
         # 사용량 0 호실은 0원
         zero = next(b for b in s.bills if b.unit.name == "코리아독스")
         self.assertEqual(zero.supply, 0)
-        # 사용량 최다(고기나라 61)가 최다 부담
-        most = next(b for b in s.bills if b.unit.name == "고기나라")
+        # 사용량 최다(명성화로 61)가 최다 부담
+        most = next(b for b in s.bills if b.unit.name == "명성화로")
         self.assertEqual(most.supply, round(61 / 141 * 417_566))
 
     def test_full_settlement_verifies(self):

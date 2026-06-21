@@ -20,6 +20,7 @@ from . import __version__
 from .calculator import settle
 from .io_utils import read_costs, read_meters, read_units, write_bills
 from .models import Settlement
+from .notice import format_notices, write_notices
 
 
 def _won(n: int) -> str:
@@ -90,6 +91,22 @@ def cmd_settle(args: argparse.Namespace) -> int:
     return 0 if not settlement.verify() else 1
 
 
+def cmd_notice(args: argparse.Namespace) -> int:
+    units = read_units(args.units)
+    items = read_costs(args.costs)
+    usage = read_meters(args.meters) if args.meters else {}
+
+    settlement = settle(units, items, usage, vat_rate=args.vat_rate)
+    text = format_notices(settlement, title=args.title,
+                          account=args.account or "", due=args.due or "")
+    write_notices(args.out, text)
+
+    print(text)
+    print(f"\n 💾 카톡 발송용 텍스트 저장 완료 → {args.out}")
+    print(f"    (호실별 블록을 복사해 카카오톡/문자로 보내세요)")
+    return 0 if not settlement.verify() else 1
+
+
 def cmd_sample(args: argparse.Namespace) -> int:
     """웰스타임 빌딩 2024년 12월 기준 예시 입력 파일을 생성한다."""
     os.makedirs(args.dir, exist_ok=True)
@@ -103,7 +120,7 @@ def cmd_sample(args: argparse.Namespace) -> int:
         ("아기고래", 62),
         ("카카오3F", 207),
         ("영동스크린4F", 207),
-        ("고기나라", 207),
+        ("명성화로", 207),
         ("코리아독스", 31),
     ]
     units_csv = "호실,평수,입주여부\n"
@@ -130,7 +147,7 @@ def cmd_sample(args: argparse.Namespace) -> int:
     water = [
         ("원유로", 11), ("와플칸", 0), ("에바돈카츠", 51),
         ("드림스터디", 1), ("아기고래", 11), ("카카오3F", 6),
-        ("영동스크린4F", 0), ("고기나라", 61), ("코리아독스", 0),
+        ("영동스크린4F", 0), ("명성화로", 61), ("코리아독스", 0),
     ]
     meters_csv = "호실,항목,사용량\n"
     for name, amt in water:
@@ -173,6 +190,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_settle.add_argument("--vat-rate", type=float, default=0.0,
                           help="부가가치세율 (기본: 0=미적용). 예: 0.1")
     p_settle.set_defaults(func=cmd_settle)
+
+    p_notice = sub.add_parser("notice", help="카카오톡 발송용 고지 텍스트 생성")
+    p_notice.add_argument("--units", required=True, help="호실 정보 CSV (호실,평수,입주여부)")
+    p_notice.add_argument("--costs", required=True, help="비용 항목 CSV (항목,총액,배분방식,단가)")
+    p_notice.add_argument("--meters", help="검침값 CSV (호실,항목,사용량)")
+    p_notice.add_argument("--out", default="notices.txt", help="출력 텍스트 파일 (기본: notices.txt)")
+    p_notice.add_argument("--title", default="관리비 안내", help="고지서 제목 (예: '웰스타임 2024년 12월 관리비')")
+    p_notice.add_argument("--account", help="입금계좌 안내 문구")
+    p_notice.add_argument("--due", help="납부기한 안내 문구")
+    p_notice.add_argument("--vat-rate", type=float, default=0.0, help="부가가치세율 (기본: 0=미적용)")
+    p_notice.set_defaults(func=cmd_notice)
 
     p_sample = sub.add_parser("sample", help="예시(웰스타임) 입력 파일 생성")
     p_sample.add_argument("--dir", default="sample", help="샘플 파일 생성 폴더 (기본: sample)")

@@ -44,6 +44,40 @@ python -m src.cli settle \
 
 > `pip install -e .` 로 설치하면 `python -m src.cli` 대신 `khali` 명령을 바로 쓸 수 있습니다.
 
+### 3) 카카오톡 발송용 고지 텍스트 만들기
+
+```bash
+python -m src.cli notice \
+  --units  ./sample/units.csv \
+  --costs  ./sample/costs.csv \
+  --meters ./sample/meters.csv \
+  --out    ./sample/notices.txt \
+  --title  "웰스타임 빌딩 2024년 12월 관리비" \
+  --account "국민은행 123456-78-901234 (예금주: 홍길동)" \
+  --due    "2025년 1월 10일까지"
+```
+
+`notices.txt`에 호실별 안내문이 구분선과 함께 생성됩니다. 각 블록을 복사해 카카오톡/문자로 보내면 됩니다. 예:
+
+```
+━━━━━━━━━ (1/9) 원유로 ━━━━━━━━━
+[웰스타임 빌딩 2024년 12월 관리비]
+원유로 (44평)
+
+· 일반관리비 : 176,000원
+· 공동전기료(기본) : 8,891원
+· 공동전기료(전력량) : 24,907원
+· 공동전기료(공용) : 982원
+· 공동수도료(세대) : 32,576원
+· 공동수도료(공용) : 13,730원
+
+▶ 합계 : 257,086원
+
+입금계좌: 국민은행 123456-78-901234 (예금주: 홍길동)
+납부기한: 2025년 1월 10일까지
+감사합니다.
+```
+
 ## 입력 파일 형식 (엑셀에서 CSV로 저장)
 
 ### `units.csv` — 호실 정보
@@ -111,7 +145,8 @@ src/
   models.py      # 도메인 모델 (호실·비용항목·고지서·단가·부가세)
   calculator.py  # 정산 엔진 (최대잉여법 배분, 단가 산정)
   io_utils.py    # CSV 입출력
-  cli.py         # 명령행 인터페이스 (settle / sample)
+  notice.py      # 카카오톡 발송용 고지 텍스트 생성
+  cli.py         # 명령행 인터페이스 (settle / notice / sample)
   main.py        # 진입점
 tests/
   test_calculator.py
