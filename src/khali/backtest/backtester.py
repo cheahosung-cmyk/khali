@@ -15,6 +15,7 @@ from ..engine.portfolio import Portfolio
 from ..risk.risk_manager import DayState, DecisionType, RiskManager
 from ..strategies import get_strategy
 from ..strategies.base import StrategyContext
+from ..strategies.filters import apply_trend_filter
 
 
 @dataclass
@@ -52,8 +53,14 @@ class Backtester:
         strat_name = strategy_name or self.s.strategy
         strategy = get_strategy(strat_name, **(params or {}))
         portfolio = Portfolio(cash_krw=self.s.base_capital_krw)
-        order_mgr = OrderManager(OrderMode.BACKTEST, self.s.fee_rate, portfolio)
+        order_mgr = OrderManager(
+            OrderMode.BACKTEST,
+            self.s.fee_rate,
+            portfolio,
+            slippage_pct=self.s.slippage_pct,
+        )
         risk = RiskManager(self.s)
+        closes_all = [c.close for c in candles]
 
         equity: list[float] = []
         peak = self.s.base_capital_krw
@@ -78,6 +85,9 @@ class Backtester:
                 entry_price=portfolio.entry_price,
             )
             signal = strategy.generate_signal(ctx)
+            signal = apply_trend_filter(
+                signal, closes_all[: i + 1], self.s.trend_filter_ma
+            )
 
             day = DayState(
                 realized_pnl_today=day_pnl.get(day_key, 0.0),

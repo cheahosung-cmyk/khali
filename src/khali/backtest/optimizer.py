@@ -43,6 +43,14 @@ class OptimizeReport:
     test_size: int = 0
 
 
+# 리스크 파라미터 최적화 그리드
+RISK_GRID = {
+    "stop_loss_pct": [0.015, 0.02, 0.03, 0.05],
+    "take_profit_pct": [0.03, 0.05, 0.08, 0.12],
+    "position_size_pct": [0.3, 0.5, 1.0],
+}
+
+
 def _score(result: BacktestResult, metric: str) -> float:
     if metric == "return":
         return result.total_return_pct
@@ -104,6 +112,48 @@ class Optimizer:
         runs.sort(key=lambda r: r.score, reverse=True)
         return OptimizeReport(
             strategy=strategy_name,
+            metric=metric,
+            best=runs[0] if runs else None,
+            top=runs[:top_n],
+            n_combos=len(combos),
+            train_size=len(train_candles),
+            test_size=len(test_candles),
+        )
+
+    def optimize_risk(
+        self,
+        candles: list[Candle],
+        strategy_name: str,
+        strategy_params: dict | None = None,
+        metric: str = "calmar",
+        train_ratio: float = 0.7,
+        top_n: int = 5,
+    ) -> OptimizeReport:
+        """손절·익절·포지션 비중을 그리드 서치 (전략 파라미터는 고정)."""
+        split = int(len(candles) * train_ratio)
+        train_candles, test_candles = candles[:split], candles[split:]
+
+        keys = list(RISK_GRID)
+        combos = [dict(zip(keys, v)) for v in itertools.product(*RISK_GRID.values())]
+
+        runs: list[OptimizeRun] = []
+        for risk in combos:
+            s2 = self.s.model_copy(update=risk)
+            bt = Backtester(s2)
+            train_res = bt.run(train_candles, strategy_name, strategy_params)
+            test_res = bt.run(test_candles, strategy_name, strategy_params)
+            runs.append(
+                OptimizeRun(
+                    params=risk,
+                    train=train_res,
+                    test=test_res,
+                    score=_score(train_res, metric),
+                )
+            )
+
+        runs.sort(key=lambda r: r.score, reverse=True)
+        return OptimizeReport(
+            strategy=f"{strategy_name} [risk]",
             metric=metric,
             best=runs[0] if runs else None,
             top=runs[:top_n],

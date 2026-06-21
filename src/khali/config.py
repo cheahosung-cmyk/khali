@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     strategy_params_json: str = Field(default="", alias="STRATEGY_PARAMS")
     candle_unit: int = Field(default=60, alias="CANDLE_UNIT")
 
+    # 추세 필터: N봉 이동평균 위일 때만 신규 매수 허용 (0=off).
+    # 하락장 매수를 피해 수익률을 지키는 장치.
+    trend_filter_ma: int = Field(default=0, alias="TREND_FILTER_MA")
+    # 백테스트 슬리피지 (체결 불리 비율, 현실성 보정)
+    slippage_pct: float = Field(default=0.0, alias="SLIPPAGE_PCT")
+
     # ── 리스크 관리 ──
     position_size_pct: float = Field(default=0.5, alias="POSITION_SIZE_PCT")
     stop_loss_pct: float = Field(default=0.02, alias="STOP_LOSS_PCT")

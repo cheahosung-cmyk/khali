@@ -28,11 +28,13 @@ class OrderManager:
         fee_rate: float,
         portfolio: Portfolio,
         client: ExchangeClient | None = None,
+        slippage_pct: float = 0.0,
     ):
         self.mode = mode
         self.fee_rate = fee_rate
         self.portfolio = portfolio
         self.client = client
+        self.slippage_pct = slippage_pct
 
     @property
     def simulated(self) -> bool:
@@ -41,14 +43,15 @@ class OrderManager:
     # ────────────────────── 매수 ──────────────────────
     def buy(self, market: str, krw_amount: float, price: float) -> OrderResult:
         if self.simulated:
+            fill = price * (1 + self.slippage_pct)  # 매수는 불리하게 +슬리피지
             fee = krw_amount * self.fee_rate
-            volume = (krw_amount - fee) / price
-            self.portfolio.apply_buy(price, volume, krw_amount)
+            volume = (krw_amount - fee) / fill
+            self.portfolio.apply_buy(fill, volume, krw_amount)
             return OrderResult(
                 uuid=str(uuid.uuid4()),
                 market=market,
                 side=Side.BUY,
-                price=price,
+                price=fill,
                 volume=volume,
                 paid_krw=krw_amount,
                 fee=fee,
@@ -60,15 +63,16 @@ class OrderManager:
     # ────────────────────── 매도 ──────────────────────
     def sell(self, market: str, volume: float, price: float) -> OrderResult:
         if self.simulated:
-            gross = volume * price
+            fill = price * (1 - self.slippage_pct)  # 매도는 불리하게 -슬리피지
+            gross = volume * fill
             fee = gross * self.fee_rate
             received = gross - fee
-            self.portfolio.apply_sell(price, volume, received)
+            self.portfolio.apply_sell(fill, volume, received)
             return OrderResult(
                 uuid=str(uuid.uuid4()),
                 market=market,
                 side=Side.SELL,
-                price=price,
+                price=fill,
                 volume=volume,
                 paid_krw=received,
                 fee=fee,

@@ -19,6 +19,7 @@ from ..risk.risk_manager import DayState, DecisionType, RiskManager
 from ..storage.repositories import TradeRepository
 from ..strategies import get_strategy
 from ..strategies.base import StrategyContext
+from ..strategies.filters import apply_trend_filter
 from .order_manager import OrderManager
 from .portfolio import Portfolio
 
@@ -35,7 +36,11 @@ class Trader:
         )
         self.portfolio = Portfolio(cash_krw=settings.base_capital_krw)
         self.order_mgr = OrderManager(
-            settings.order_mode, settings.fee_rate, self.portfolio, self.client
+            settings.order_mode,
+            settings.fee_rate,
+            self.portfolio,
+            self.client,
+            slippage_pct=settings.slippage_pct,
         )
         self.risk = RiskManager(settings)
         self.strategy = get_strategy(settings.strategy, **settings.strategy_params)
@@ -127,6 +132,9 @@ class Trader:
             entry_price=self.portfolio.entry_price,
         )
         signal = self.strategy.generate_signal(ctx)
+        signal = apply_trend_filter(
+            signal, [c.close for c in candles], self.s.trend_filter_ma
+        )
 
         day = DayState(
             realized_pnl_today=TradeRepository.realized_pnl_today(
