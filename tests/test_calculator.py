@@ -5,9 +5,12 @@
 
 import unittest
 
+from datetime import date
+
 from src.calculator import allocate, settle
 from src.invoice import build_invoice_html
 from src.notice import format_notices
+from src.payment import Payment, build_arrears
 from src.models import AllocationMethod, CostItem, Unit, round_won
 
 
@@ -141,6 +144,41 @@ class TestOutputs(unittest.TestCase):
         self.assertIn("원유로", html)
         self.assertIn("드림스터디", html)
         self.assertIn("page-break-after", html)
+
+
+class TestArrears(unittest.TestCase):
+    def setUp(self):
+        self.units = [Unit("원유로", 44), Unit("드림스터디", 207)]
+        self.items = [CostItem("일반관리비", 0, AllocationMethod.AREA, rate=4000)]
+        self.s = settle(self.units, self.items)  # 원유로 176,000 / 드림 828,000
+
+    def test_fully_paid(self):
+        pays = {"원유로": Payment(paid=176_000), "드림스터디": Payment(paid=828_000)}
+        arrears = build_arrears(self.s, pays)
+        for a in arrears:
+            self.assertEqual(a.status, "완납")
+            self.assertEqual(a.unpaid, 0)
+
+    def test_unpaid_and_partial(self):
+        pays = {"원유로": Payment(paid=0), "드림스터디": Payment(paid=800_000)}
+        arrears = {a.name: a for a in build_arrears(self.s, pays)}
+        self.assertEqual(arrears["원유로"].status, "미납")
+        self.assertEqual(arrears["원유로"].unpaid, 176_000)
+        self.assertEqual(arrears["드림스터디"].status, "부분납")
+        self.assertEqual(arrears["드림스터디"].unpaid, 28_000)
+
+    def test_late_fee(self):
+        # 미납 176,000원, 연 12%, 30일 연체
+        pays = {"원유로": Payment(paid=0), "드림스터디": Payment(paid=828_000)}
+        arrears = {a.name: a for a in build_arrears(
+            self.s, pays, due_date=date(2025, 1, 10),
+            late_rate=0.12, asof=date(2025, 2, 9))}
+        a = arrears["원유로"]
+        self.assertEqual(a.overdue_days, 30)
+        self.assertEqual(a.late_fee, round_won(176_000 * 0.12 * 30 / 365))
+        self.assertEqual(a.total_due, a.unpaid + a.late_fee)
+        # 완납 호실은 연체 없음
+        self.assertEqual(arrears["드림스터디"].late_fee, 0)
 
 
 if __name__ == "__main__":

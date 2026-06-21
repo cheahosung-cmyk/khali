@@ -96,6 +96,42 @@ python -m src.cli invoice \
 
 `invoice.html`을 브라우저로 열어 **인쇄하거나 PDF로 저장**하면 됩니다. 호실당 1장씩 페이지가 나뉩니다.
 
+### 5) 엑셀(.xlsx) 고지서
+
+`settle` 에 `--xlsx` 를 주면 CSV와 함께 서식이 입혀진 엑셀 파일도 만듭니다. (`pip install "khali[excel]"` 또는 `pip install openpyxl` 필요)
+
+```bash
+python -m src.cli settle --units ./sample/units.csv --costs ./sample/costs.csv \
+  --meters ./sample/meters.csv --out ./sample/bills.csv --xlsx ./sample/bills.xlsx
+```
+
+### 6) 미납 / 연체 관리
+
+납부 내역 CSV(`호실,납부액,납부일`)와 대조해 호실별 미납액과 연체료를 계산합니다.
+연체료 = 미납액 × 연체율(연이율) × 연체일수 ÷ 365.
+
+```bash
+python -m src.cli status \
+  --units ./sample/units.csv --costs ./sample/costs.csv --meters ./sample/meters.csv \
+  --payments ./sample/payments.csv \
+  --due-date 2025-01-10 --late-rate 0.12 --asof 2025-02-09 \
+  --out ./sample/arrears.csv
+```
+
+출력: `호실, 청구액, 납부액, 미납액, 연체일수, 연체료, 납부할총액, 상태(완납/부분납/미납)`
+
+### 7) 연간 집계표
+
+매달 만든 고지서 CSV들을 모아 호실별·월별 청구액과 연간 합계를 한 표로 만듭니다.
+
+```bash
+python -m src.cli annual \
+  --bills ./bills_2024_12.csv ./bills_2025_01.csv ./bills_2025_02.csv \
+  --out ./annual.csv
+```
+
+출력: `호실, (월별 컬럼...), 연간합계` + 맨 아래 `월합계` 행. (월 라벨은 `bills_` 뒤 파일명에서 자동 추출)
+
 ### 전월 대비 증감 표시
 
 `settle` / `notice` / `invoice` 모두 `--prev`에 **전월 고지서 CSV**를 주면 호실별 증감이 표시됩니다.
@@ -174,7 +210,10 @@ src/
   io_utils.py    # CSV 입출력 (전월 대비 포함)
   notice.py      # 카카오톡 발송용 고지 텍스트 생성 (개별 파일 분리)
   invoice.py     # 인쇄용 HTML 고지서 생성
-  cli.py         # 명령행 인터페이스 (settle / notice / invoice / sample)
+  xlsx.py        # 엑셀(.xlsx) 고지서 출력 (선택적, openpyxl)
+  payment.py     # 미납/연체료 관리
+  annual.py      # 연간 집계표
+  cli.py         # CLI (settle / notice / invoice / status / annual / sample)
   main.py        # 진입점
 tests/
   test_calculator.py
