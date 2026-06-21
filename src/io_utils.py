@@ -88,16 +88,50 @@ def read_meters(path: str) -> Dict[str, Dict[str, float]]:
     return usage
 
 
-def write_bills(path: str, settlement: Settlement) -> None:
+def read_prev_totals(path: str) -> Dict[str, int]:
+    """이전 달 고지서 CSV(write_bills 출력)에서 호실별 청구액을 읽는다.
+
+    전월 대비 증감 표시에 사용한다. {호실명: 청구액}.
+    """
+    totals: Dict[str, int] = {}
+    with open(path, newline="", encoding=_ENCODING) as f:
+        rows = list(csv.reader(f))
+    if not rows:
+        return totals
+    header = rows[0]
+    idx = None
+    for col in ("청구합계", "합계"):
+        if col in header:
+            idx = header.index(col)
+            break
+    if idx is None:
+        idx = len(header) - 1
+    for r in rows[1:]:
+        if not r or not r[0].strip():
+            continue
+        name = r[0].strip()
+        if any(k in name for k in ("합계", "총액", "부담", "검증")):
+            continue
+        try:
+            totals[name] = int(float(r[idx].replace(",", "").strip()))
+        except (ValueError, IndexError):
+            continue
+    return totals
+
+
+def write_bills(path: str, settlement: Settlement,
+                prev: Optional[Dict[str, int]] = None) -> None:
     """호실별 고지서를 CSV로 저장한다.
 
     - 부가세 적용 시: 항목별 + 공급가액 + 부가세 + 청구합계
     - 부가세 미적용 시: 항목별 + 합계
     - 공실 호실은 건물주 부담분을 별도 표시
+    - prev(전월 청구액)가 있으면 전월합계/증감 컬럼을 추가
     """
     item_names = [item.name for item in settlement.items]
     use_vat = settlement.vat_rate > 0
     use_status = settlement.has_vacant
+    use_prev = prev is not None
 
     header = ["호실", "평수"]
     if use_status:
@@ -107,6 +141,8 @@ def write_bills(path: str, settlement: Settlement) -> None:
         header += ["공급가액", "부가세", "청구합계"]
     else:
         header += ["합계"]
+    if use_prev:
+        header += ["전월합계", "증감"]
 
     def _row(bill, status_label=None):
         u = bill.unit
@@ -121,6 +157,12 @@ def write_bills(path: str, settlement: Settlement) -> None:
                 row += [bill.supply, "-", "-"]
         else:
             row += [bill.supply]
+        if use_prev:
+            if u.occupied and u.name in prev:
+                pv = prev[u.name]
+                row += [pv, settlement.claim(bill) - pv]
+            else:
+                row += ["", ""]
         return row
 
     with open(path, "w", newline="", encoding=_ENCODING) as f:
@@ -142,6 +184,10 @@ def write_bills(path: str, settlement: Settlement) -> None:
             tail += [settlement.supply_billed_total, settlement.vat_total, settlement.billed_grand_total]
         else:
             tail += [settlement.supply_billed_total]
+        if use_prev:
+            prev_sum = sum(prev.get(b.unit.name, 0) for b in settlement.tenant_bills)
+            cur_sum = sum(settlement.claim(b) for b in settlement.tenant_bills if b.unit.name in prev)
+            tail += [prev_sum, cur_sum - prev_sum]
         writer.writerow(prefix + tail)
 
         if settlement.has_vacant:
@@ -153,6 +199,8 @@ def write_bills(path: str, settlement: Settlement) -> None:
                 vtail += [settlement.owner_borne_total, "-", "-"]
             else:
                 vtail += [settlement.owner_borne_total]
+            if use_prev:
+                vtail += ["", ""]
             writer.writerow(vp + vtail)
 
         bp = ["건물 총액(검증)", ""]
@@ -163,4 +211,6 @@ def write_bills(path: str, settlement: Settlement) -> None:
             btail += [settlement.building_total, "", ""]
         else:
             btail += [settlement.building_total]
+        if use_prev:
+            btail += ["", ""]
         writer.writerow(bp + btail)

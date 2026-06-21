@@ -119,6 +119,10 @@ class Settlement:
     def billed_total(self, bill: UnitBill) -> int:
         return bill.supply + self.vat(bill)
 
+    def claim(self, bill: UnitBill) -> int:
+        """실제 청구액(부가세 적용 시 청구합계, 아니면 공급가액)."""
+        return self.billed_total(bill) if self.vat_rate > 0 else bill.supply
+
     # ---- 호실 구분 ----
     @property
     def tenant_bills(self) -> List[UnitBill]:

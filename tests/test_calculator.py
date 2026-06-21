@@ -6,6 +6,8 @@
 import unittest
 
 from src.calculator import allocate, settle
+from src.invoice import build_invoice_html
+from src.notice import format_notices
 from src.models import AllocationMethod, CostItem, Unit, round_won
 
 
@@ -117,6 +119,28 @@ class TestSettle(unittest.TestCase):
     def test_empty_units_raises(self):
         with self.assertRaises(ValueError):
             settle([], [CostItem("청소비", 100, AllocationMethod.AREA)])
+
+
+class TestOutputs(unittest.TestCase):
+    def setUp(self):
+        self.units = [Unit("원유로", 44), Unit("드림스터디", 207)]
+        self.items = [CostItem("일반관리비", 0, AllocationMethod.AREA, rate=4000)]
+        self.s = settle(self.units, self.items)
+
+    def test_notice_contains_amounts_and_diff(self):
+        prev = {"원유로": 170_000}  # 전월 176,000보다 적음 → 증가
+        text = format_notices(self.s, title="테스트", prev=prev)
+        self.assertIn("원유로", text)
+        self.assertIn("176,000원", text)
+        self.assertIn("▲", text)  # 전월 대비 증가 표시
+        self.assertIn("관리소장 확인용", text)
+
+    def test_invoice_html_structure(self):
+        html = build_invoice_html(self.s, title="테스트")
+        self.assertIn("<!DOCTYPE html>", html)
+        self.assertIn("원유로", html)
+        self.assertIn("드림스터디", html)
+        self.assertIn("page-break-after", html)
 
 
 if __name__ == "__main__":

@@ -78,6 +78,33 @@ python -m src.cli notice \
 감사합니다.
 ```
 
+호실별로 **개별 파일**이 필요하면 `--split` 폴더를 지정하세요(`01_원유로.txt` … 형태로 저장):
+
+```bash
+python -m src.cli notice --units ./sample/units.csv --costs ./sample/costs.csv \
+  --meters ./sample/meters.csv --out ./sample/notices.txt --split ./sample/개별
+```
+
+### 4) 인쇄용 HTML 고지서
+
+```bash
+python -m src.cli invoice \
+  --units ./sample/units.csv --costs ./sample/costs.csv --meters ./sample/meters.csv \
+  --out ./sample/invoice.html --title "웰스타임 빌딩 2024년 12월 관리비" \
+  --account "국민은행 123456-78-901234" --due "2025년 1월 10일까지"
+```
+
+`invoice.html`을 브라우저로 열어 **인쇄하거나 PDF로 저장**하면 됩니다. 호실당 1장씩 페이지가 나뉩니다.
+
+### 전월 대비 증감 표시
+
+`settle` / `notice` / `invoice` 모두 `--prev`에 **전월 고지서 CSV**를 주면 호실별 증감이 표시됩니다.
+
+```bash
+python -m src.cli notice ... --prev ./sample/bills_2024_12.csv
+# 고지서에 "전월 대비 : ▲ 12,000원 증가" 같은 줄이 추가됩니다.
+```
+
 ## 입력 파일 형식 (엑셀에서 CSV로 저장)
 
 ### `units.csv` — 호실 정보
@@ -144,9 +171,10 @@ python -m unittest discover -s tests
 src/
   models.py      # 도메인 모델 (호실·비용항목·고지서·단가·부가세)
   calculator.py  # 정산 엔진 (최대잉여법 배분, 단가 산정)
-  io_utils.py    # CSV 입출력
-  notice.py      # 카카오톡 발송용 고지 텍스트 생성
-  cli.py         # 명령행 인터페이스 (settle / notice / sample)
+  io_utils.py    # CSV 입출력 (전월 대비 포함)
+  notice.py      # 카카오톡 발송용 고지 텍스트 생성 (개별 파일 분리)
+  invoice.py     # 인쇄용 HTML 고지서 생성
+  cli.py         # 명령행 인터페이스 (settle / notice / invoice / sample)
   main.py        # 진입점
 tests/
   test_calculator.py

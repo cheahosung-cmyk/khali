@@ -18,9 +18,10 @@ from typing import List, Optional
 
 from . import __version__
 from .calculator import settle
-from .io_utils import read_costs, read_meters, read_units, write_bills
+from .invoice import build_invoice_html, write_invoice
+from .io_utils import read_costs, read_meters, read_prev_totals, read_units, write_bills
 from .models import Settlement
-from .notice import format_notices, write_notices
+from .notice import format_notices, write_notices, write_split_notices
 
 
 def _won(n: int) -> str:
@@ -80,12 +81,15 @@ def cmd_settle(args: argparse.Namespace) -> int:
     units = read_units(args.units)
     items = read_costs(args.costs)
     usage = read_meters(args.meters) if args.meters else {}
+    prev = read_prev_totals(args.prev) if args.prev else None
 
     settlement = settle(units, items, usage, vat_rate=args.vat_rate)
-    write_bills(args.out, settlement)
+    write_bills(args.out, settlement, prev=prev)
 
     _print_summary(settlement)
     _preview_bills(settlement)
+    if prev:
+        print(f" 📊 전월 대비 증감 포함 (기준: {args.prev})")
     print(f" 💾 호실별 고지서 저장 완료 → {args.out}")
 
     return 0 if not settlement.verify() else 1
@@ -95,15 +99,37 @@ def cmd_notice(args: argparse.Namespace) -> int:
     units = read_units(args.units)
     items = read_costs(args.costs)
     usage = read_meters(args.meters) if args.meters else {}
+    prev = read_prev_totals(args.prev) if args.prev else None
 
     settlement = settle(units, items, usage, vat_rate=args.vat_rate)
     text = format_notices(settlement, title=args.title,
-                          account=args.account or "", due=args.due or "")
+                          account=args.account or "", due=args.due or "", prev=prev)
     write_notices(args.out, text)
 
     print(text)
     print(f"\n 💾 카톡 발송용 텍스트 저장 완료 → {args.out}")
+    if args.split:
+        paths = write_split_notices(args.split, settlement, title=args.title,
+                                    account=args.account or "", due=args.due or "", prev=prev)
+        print(f" 💾 호실별 개별 파일 {len(paths)}개 저장 완료 → {args.split}/")
     print(f"    (호실별 블록을 복사해 카카오톡/문자로 보내세요)")
+    return 0 if not settlement.verify() else 1
+
+
+def cmd_invoice(args: argparse.Namespace) -> int:
+    units = read_units(args.units)
+    items = read_costs(args.costs)
+    usage = read_meters(args.meters) if args.meters else {}
+    prev = read_prev_totals(args.prev) if args.prev else None
+
+    settlement = settle(units, items, usage, vat_rate=args.vat_rate)
+    html_text = build_invoice_html(settlement, title=args.title,
+                                   account=args.account or "", due=args.due or "", prev=prev)
+    write_invoice(args.out, html_text)
+
+    _print_summary(settlement)
+    print(f" 💾 인쇄용 HTML 고지서 저장 완료 → {args.out}")
+    print(f"    (브라우저로 열어 인쇄하거나 PDF로 저장하세요. 호실당 1장씩 페이지 분리)")
     return 0 if not settlement.verify() else 1
 
 
@@ -189,6 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_settle.add_argument("--out", default="bills.csv", help="출력 고지서 CSV 경로 (기본: bills.csv)")
     p_settle.add_argument("--vat-rate", type=float, default=0.0,
                           help="부가가치세율 (기본: 0=미적용). 예: 0.1")
+    p_settle.add_argument("--prev", help="전월 고지서 CSV 경로 (전월 대비 증감 표시)")
     p_settle.set_defaults(func=cmd_settle)
 
     p_notice = sub.add_parser("notice", help="카카오톡 발송용 고지 텍스트 생성")
@@ -200,7 +227,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_notice.add_argument("--account", help="입금계좌 안내 문구")
     p_notice.add_argument("--due", help="납부기한 안내 문구")
     p_notice.add_argument("--vat-rate", type=float, default=0.0, help="부가가치세율 (기본: 0=미적용)")
+    p_notice.add_argument("--prev", help="전월 고지서 CSV 경로 (전월 대비 증감 표시)")
+    p_notice.add_argument("--split", help="호실별 개별 .txt 파일을 저장할 폴더")
     p_notice.set_defaults(func=cmd_notice)
+
+    p_invoice = sub.add_parser("invoice", help="인쇄용 HTML 고지서 생성")
+    p_invoice.add_argument("--units", required=True, help="호실 정보 CSV (호실,평수,입주여부)")
+    p_invoice.add_argument("--costs", required=True, help="비용 항목 CSV (항목,총액,배분방식,단가)")
+    p_invoice.add_argument("--meters", help="검침값 CSV (호실,항목,사용량)")
+    p_invoice.add_argument("--out", default="invoice.html", help="출력 HTML 파일 (기본: invoice.html)")
+    p_invoice.add_argument("--title", default="관리비 고지서", help="고지서 제목")
+    p_invoice.add_argument("--account", help="입금계좌 안내 문구")
+    p_invoice.add_argument("--due", help="납부기한 안내 문구")
+    p_invoice.add_argument("--vat-rate", type=float, default=0.0, help="부가가치세율 (기본: 0=미적용)")
+    p_invoice.add_argument("--prev", help="전월 고지서 CSV 경로 (전월 대비 증감 표시)")
+    p_invoice.set_defaults(func=cmd_invoice)
 
     p_sample = sub.add_parser("sample", help="예시(웰스타임) 입력 파일 생성")
     p_sample.add_argument("--dir", default="sample", help="샘플 파일 생성 폴더 (기본: sample)")
