@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     daily_loss_limit_pct: float = Field(default=0.1, alias="DAILY_LOSS_LIMIT_PCT")
     max_consecutive_losses: int = Field(default=3, alias="MAX_CONSECUTIVE_LOSSES")
     min_order_krw: float = Field(default=5000, alias="MIN_ORDER_KRW")
-    fee_rate: float = Field(default=0.0025, alias="FEE_RATE")
+    fee_rate: float = Field(default=0.0004, alias="FEE_RATE")
 
     # ── 엔진 ──
     poll_interval_sec: int = Field(default=10, alias="POLL_INTERVAL_SEC")
