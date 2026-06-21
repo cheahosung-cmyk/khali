@@ -36,12 +36,15 @@ def cmd_web(args) -> None:
 
 def cmd_backtest(args) -> None:
     from .backtest.backtester import Backtester
-    from .exchange.bithumb_client import BithumbClient
+    from .exchange.factory import create_client
     from .strategies import list_strategies
 
     settings = get_settings()
-    client = BithumbClient()
-    print(f"캔들 다운로드: {settings.market} {settings.candle_unit}분봉 x{args.count}")
+    client = create_client(settings.api_version)  # 시세는 키 불필요
+    print(
+        f"캔들 다운로드: {settings.market} {settings.candle_unit}분봉 "
+        f"x{args.count} (API {settings.api_version}.0)"
+    )
     candles = client.get_candles(settings.market, settings.candle_unit, args.count)
     client.close()
     print(f"  -> {len(candles)}개 ({candles[0].timestamp} ~ {candles[-1].timestamp})\n")
@@ -90,7 +93,10 @@ def main() -> None:
 
     bt = sub.add_parser("backtest", help="전략 백테스트")
     bt.add_argument("--all", action="store_true", help="모든 전략 비교")
-    bt.add_argument("--count", type=int, default=200, help="캔들 개수 (최대 200)")
+    bt.add_argument(
+        "--count", type=int, default=2000,
+        help="사용할 캔들 개수 (API 1.0 최대 ~5000, 2.0 최대 200)",
+    )
 
     sub.add_parser("run", help="헤드리스 매매 루프")
 

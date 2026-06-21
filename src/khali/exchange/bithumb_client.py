@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 import httpx
 import jwt
 
+from .base import ExchangeClient
 from .models import Balance, Candle, OrderResult, Side, Ticker
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,9 @@ class BithumbError(Exception):
     """빗썸 API 오류."""
 
 
-class BithumbClient:
+class BithumbClient(ExchangeClient):
+    """빗썸 API 2.0 (JWT) 클라이언트."""
+
     def __init__(
         self,
         access_key: str = "",
@@ -179,3 +182,58 @@ class BithumbClient:
         return self._request(
             "DELETE", "/v1/order", params={"uuid": order_uuid}, auth=True
         )
+
+    # ────────────────────── 정규화 주문 (엔진 인터페이스) ──────────────────────
+    def execute_buy(
+        self, market: str, krw_amount: float, ref_price: float
+    ) -> OrderResult:
+        resp = self.buy_market(market, krw_amount)
+        filled = self._poll_fill(resp.get("uuid"))
+        volume = float(filled.get("executed_volume") or 0)
+        paid = float(filled.get("price") or krw_amount)
+        fee = float(filled.get("paid_fee") or 0)
+        avg_price = (paid / volume) if volume else ref_price
+        return OrderResult(
+            uuid=resp.get("uuid", ""),
+            market=market,
+            side=Side.BUY,
+            price=avg_price,
+            volume=volume,
+            paid_krw=paid,
+            fee=fee,
+            created_at=datetime.now(timezone.utc),
+            simulated=False,
+        )
+
+    def execute_sell(
+        self, market: str, volume: float, ref_price: float
+    ) -> OrderResult:
+        resp = self.sell_market(market, volume)
+        filled = self._poll_fill(resp.get("uuid"))
+        exec_vol = float(filled.get("executed_volume") or volume)
+        funds = float(filled.get("price") or 0) or exec_vol * ref_price
+        fee = float(filled.get("paid_fee") or 0)
+        received = funds - fee
+        avg_price = (funds / exec_vol) if exec_vol else ref_price
+        return OrderResult(
+            uuid=resp.get("uuid", ""),
+            market=market,
+            side=Side.SELL,
+            price=avg_price,
+            volume=exec_vol,
+            paid_krw=received,
+            fee=fee,
+            created_at=datetime.now(timezone.utc),
+            simulated=False,
+        )
+
+    def _poll_fill(self, order_uuid: str | None, retries: int = 5) -> dict:
+        if not order_uuid:
+            return {}
+        last: dict = {}
+        for _ in range(retries):
+            last = self.get_order(order_uuid)
+            if last.get("state") in ("done", "cancel"):
+                return last
+            time.sleep(0.3)
+        return last

@@ -13,7 +13,8 @@ import time
 from datetime import datetime, timezone
 
 from ..config import OrderMode, Settings
-from ..exchange.bithumb_client import BithumbClient
+from ..exchange.base import ExchangeClient
+from ..exchange.factory import create_client
 from ..risk.risk_manager import DayState, DecisionType, RiskManager
 from ..storage.repositories import TradeRepository
 from ..strategies import get_strategy
@@ -25,10 +26,12 @@ logger = logging.getLogger(__name__)
 
 
 class Trader:
-    def __init__(self, settings: Settings, client: BithumbClient | None = None):
+    def __init__(self, settings: Settings, client: ExchangeClient | None = None):
         self.s = settings
-        self.client = client or BithumbClient(
-            settings.bithumb_access_key, settings.bithumb_secret_key
+        self.access_key = settings.bithumb_access_key
+        self.secret_key = settings.bithumb_secret_key
+        self.client = client or create_client(
+            settings.api_version, self.access_key, self.secret_key
         )
         self.portfolio = Portfolio(cash_krw=settings.base_capital_krw)
         self.order_mgr = OrderManager(
@@ -47,11 +50,31 @@ class Trader:
         self.error: str | None = None
 
     # ────────────────────── 제어 ──────────────────────
+    @property
+    def has_keys(self) -> bool:
+        return bool(self.access_key and self.secret_key)
+
+    def set_credentials(self, access_key: str, secret_key: str) -> None:
+        """대시보드 로그인: 런타임에 API 키를 주입하고 클라이언트를 재생성."""
+        if self.running:
+            raise RuntimeError("매매 중에는 키를 변경할 수 없습니다. 먼저 정지하세요.")
+        self.access_key = access_key.strip()
+        self.secret_key = secret_key.strip()
+        self.client = create_client(
+            self.s.api_version, self.access_key, self.secret_key
+        )
+        self.order_mgr.client = self.client
+
+    def verify_credentials(self) -> bool:
+        """키 유효성 확인 (잔고 조회 시도)."""
+        self.client.get_balances()
+        return True
+
     def start(self) -> None:
         if self.running:
             return
-        if self.s.order_mode == OrderMode.LIVE and not self.s.has_api_keys:
-            raise RuntimeError("live 모드는 API 키가 필요합니다 (.env 설정).")
+        if self.s.order_mode == OrderMode.LIVE and not self.has_keys:
+            raise RuntimeError("live 모드는 API 키가 필요합니다 (로그인 또는 .env).")
         self._stop.clear()
         self.running = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -170,6 +193,8 @@ class Trader:
         return {
             "running": self.running,
             "mode": self.s.order_mode.value,
+            "api_version": self.s.api_version,
+            "has_keys": self.has_keys,
             "market": self.s.market,
             "strategy": self.s.strategy,
             "last_price": price,

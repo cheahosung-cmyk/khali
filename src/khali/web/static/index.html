@@ -42,6 +42,24 @@
   <span id="market" style="color:#9aa4b2;font-size:13px"></span>
 </header>
 <main>
+  <div class="card" id="loginCard" style="margin-bottom:16px">
+    <div class="label" style="margin-bottom:8px">
+      빗썸 API 키 (메모리에만 저장 · 디스크 미기록 · 출금권한 없는 키 사용)
+    </div>
+    <div id="loginForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="ak" placeholder="Connect/Access Key" style="flex:1;min-width:220px;
+        padding:9px;border-radius:8px;border:1px solid #2b3240;background:#0f1115;color:#e6e6e6" />
+      <input id="sk" type="password" placeholder="Secret Key" style="flex:1;min-width:220px;
+        padding:9px;border-radius:8px;border:1px solid #2b3240;background:#0f1115;color:#e6e6e6" />
+      <button onclick="login()">🔑 로그인</button>
+    </div>
+    <div id="loginState" style="display:none;align-items:center;gap:12px">
+      <span class="pos">● 로그인됨 (키 입력 완료)</span>
+      <button class="stop" onclick="logout()">로그아웃</button>
+    </div>
+    <div id="loginErr" class="err" style="margin-top:8px"></div>
+  </div>
+
   <div class="grid">
     <div class="card"><div class="label">총 평가자산</div>
       <div class="value" id="total">-</div></div>
@@ -90,8 +108,14 @@ async function refresh() {
     document.getElementById('action').textContent =
       '최근 판단: ' + (s.last_action || '-') + ' — ' + (s.last_reason || '');
     document.getElementById('err').textContent = s.error ? ('⚠ ' + s.error) : '';
-    document.getElementById('startBtn').disabled = s.running;
+    // 로그인 상태 토글 (live 모드는 키 필요)
+    document.getElementById('loginForm').style.display = s.has_keys ? 'none' : 'flex';
+    document.getElementById('loginState').style.display = s.has_keys ? 'flex' : 'none';
+    const needKey = (s.mode === 'live') && !s.has_keys;
+    document.getElementById('startBtn').disabled = s.running || needKey;
     document.getElementById('stopBtn').disabled = !s.running;
+    document.getElementById('startBtn').title = needKey
+      ? 'live 모드는 먼저 API 키 로그인이 필요합니다' : '';
 
     const trades = await (await fetch('/api/trades?limit=30')).json();
     document.getElementById('trades').innerHTML = trades.map(t => `
@@ -109,6 +133,24 @@ async function refresh() {
 }
 async function ctl(action) {
   await fetch('/api/' + action, { method: 'POST' });
+  refresh();
+}
+async function login() {
+  const ak = document.getElementById('ak').value.trim();
+  const sk = document.getElementById('sk').value.trim();
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+  if (!ak || !sk) { errEl.textContent = 'Key 를 모두 입력하세요.'; return; }
+  const r = await (await fetch('/api/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ access_key: ak, secret_key: sk })
+  })).json();
+  if (!r.ok) { errEl.textContent = '⚠ ' + r.error; }
+  else { document.getElementById('ak').value = ''; document.getElementById('sk').value = ''; }
+  refresh();
+}
+async function logout() {
+  await fetch('/api/logout', { method: 'POST' });
   refresh();
 }
 refresh();

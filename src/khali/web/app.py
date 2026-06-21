@@ -16,6 +16,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
 from ..config import Settings, get_settings
 from ..engine.trader import Trader
@@ -25,6 +26,12 @@ from ..storage.repositories import TradeRepository
 logger = logging.getLogger(__name__)
 
 _STATIC = Path(__file__).parent / "static"
+
+
+class LoginPayload(BaseModel):
+    access_key: str
+    secret_key: str
+    verify: bool = True
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -50,6 +57,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/equity")
     def equity() -> list[dict]:
         return TradeRepository.equity_curve()
+
+    @app.post("/api/login")
+    def login(payload: LoginPayload) -> dict:
+        """API 키를 런타임에 주입(메모리 저장). 디스크에 쓰지 않습니다."""
+        try:
+            trader.set_credentials(payload.access_key, payload.secret_key)
+            if payload.verify:
+                trader.verify_credentials()
+            return {"ok": True, "has_keys": trader.has_keys}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.post("/api/logout")
+    def logout() -> dict:
+        if trader.running:
+            return {"ok": False, "error": "매매 중에는 로그아웃 불가"}
+        trader.set_credentials("", "")
+        return {"ok": True, "has_keys": False}
 
     @app.post("/api/start")
     def start() -> dict:

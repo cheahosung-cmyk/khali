@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     )
 
     # ── 빗썸 API 키 ──
+    # API 1.0: connect key / secret key, API 2.0: access key / secret key
+    api_version: int = Field(default=1, alias="API_VERSION")
     bithumb_access_key: str = Field(default="", alias="BITHUMB_ACCESS_KEY")
     bithumb_secret_key: str = Field(default="", alias="BITHUMB_SECRET_KEY")
 
