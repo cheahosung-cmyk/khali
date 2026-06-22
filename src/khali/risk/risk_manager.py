@@ -100,7 +100,9 @@ class RiskManager:
     # ────────────────────── 내부 헬퍼 ──────────────────────
     def _buy_blocked(self, day: DayState) -> str | None:
         s = self.s
-        loss_limit = -abs(s.daily_loss_limit_pct) * s.base_capital_krw
+        # 현재 평가자산 기준(복리 반영). 자본이 늘면 한도도 비례해 커진다.
+        base = day.capital if day.capital > 0 else s.base_capital_krw
+        loss_limit = -abs(s.daily_loss_limit_pct) * base
         if day.realized_pnl_today <= loss_limit:
             return (
                 f"일일 손실 한도 도달 ({day.realized_pnl_today:.0f}원) - 당일 매매 중단"

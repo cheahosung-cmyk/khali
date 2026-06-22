@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from .db import get_session
-from .models import EquitySnapshot, TradeRecord
+from .models import BotState, EquitySnapshot, TradeRecord
 
 
 class TradeRepository:
@@ -89,6 +89,38 @@ class TradeRepository:
                 )
             ).all()
             return sum(r.realized_pnl for r in rows)
+
+    @staticmethod
+    def save_state(*, market: str, mode: str, portfolio) -> None:
+        with get_session() as s:
+            st = s.get(BotState, 1)
+            if st is None:
+                st = BotState(id=1)
+                s.add(st)
+            st.market = market
+            st.mode = mode
+            st.cash_krw = portfolio.cash_krw
+            st.coin_volume = portfolio.coin_volume
+            st.entry_price = portfolio.entry_price
+            st.high_price = portfolio.high_price
+            st.realized_pnl_total = portfolio.realized_pnl_total
+            st.consecutive_losses = portfolio.consecutive_losses
+
+    @staticmethod
+    def load_state(market: str, mode: str) -> dict | None:
+        """저장된 상태를 반환. market/mode 가 일치할 때만 (안전)."""
+        with get_session() as s:
+            st = s.get(BotState, 1)
+            if st is None or st.market != market or st.mode != mode:
+                return None
+            return {
+                "cash_krw": st.cash_krw,
+                "coin_volume": st.coin_volume,
+                "entry_price": st.entry_price,
+                "high_price": st.high_price,
+                "realized_pnl_total": st.realized_pnl_total,
+                "consecutive_losses": st.consecutive_losses,
+            }
 
     @staticmethod
     def equity_curve(limit: int = 500) -> list[dict]:

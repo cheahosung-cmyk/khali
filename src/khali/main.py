@@ -230,6 +230,36 @@ def cmd_scan(args) -> None:
             print(f"\n  💡 상대강도 1위는 {top.symbol}이나 시장이 약세 → 적극 진입은 보류.")
 
 
+def cmd_rotate(args) -> None:
+    """멀티코인 상대강도 로테이션 백테스트 (20인 토론 결정 방향)."""
+    from .analysis.scanner import DEFAULT_BASKET
+    from .backtest.rotation import RotationBacktester
+    from .exchange.factory import create_client
+
+    settings = get_settings()
+    client = create_client(settings.api_version)
+    symbols = args.markets.split(",") if args.markets else DEFAULT_BASKET
+    data = {s: client.get_candles(f"KRW-{s}", 1440, args.count) for s in symbols}
+    btc = data.get("BTC") or client.get_candles("KRW-BTC", 1440, args.count)
+    client.close()
+
+    rb = RotationBacktester(settings)
+    r = rb.run(
+        data, btc, lookback=args.lookback, rebalance_days=args.rebalance,
+        regime_ma=args.regime_ma, use_regime=not args.no_regime,
+    )
+    print(f"\n로테이션 백테스트 (코인 {len(symbols)}종, lookback={args.lookback}일, "
+          f"리밸런스 {args.rebalance}일, BTC레짐 {'OFF' if args.no_regime else 'ON'})")
+    print(f"  {r.summary()}")
+    print("\n  [비교] 매수후보유:")
+    for s in symbols:
+        d = data[s]
+        print(f"    {s}: {(d[-1].close/d[0].close-1)*100:+.1f}%")
+    # 최근 보유 이력 요약
+    tail = r.holdings_log[-10:]
+    print(f"\n  최근 보유: {' → '.join(tail)}")
+
+
 def cmd_run(args) -> None:
     from .engine.trader import Trader
     from .storage.db import init_db
@@ -287,6 +317,15 @@ def main() -> None:
     sub.add_parser("regime", help="현재 시장 추세 진단 (매수 우위 장세인지)")
     sc = sub.add_parser("scan", help="멀티코인 상대강도 스캔 + BTC 레짐")
     sc.add_argument("--markets", help="쉼표구분 심볼 (예: BTC,ETH,XRP). 생략시 기본 바스켓")
+
+    ro = sub.add_parser("rotate", help="멀티코인 상대강도 로테이션 백테스트")
+    ro.add_argument("--markets", help="쉼표구분 심볼. 생략시 기본 바스켓")
+    ro.add_argument("--lookback", type=int, default=90, help="모멘텀 산정 기간(일)")
+    ro.add_argument("--rebalance", type=int, default=30, help="리밸런스 주기(일)")
+    ro.add_argument("--regime-ma", type=int, default=50, help="BTC 레짐 MA 기간")
+    ro.add_argument("--no-regime", action="store_true", help="BTC 레짐 게이트 끄기")
+    ro.add_argument("--count", type=int, default=1500, help="사용할 일봉 개수")
+
     sub.add_parser("run", help="헤드리스 매매 루프")
 
     args = parser.parse_args()
@@ -299,6 +338,7 @@ def main() -> None:
         "check": cmd_check,
         "regime": cmd_regime,
         "scan": cmd_scan,
+        "rotate": cmd_rotate,
         "run": cmd_run,
     }[command](args)
 

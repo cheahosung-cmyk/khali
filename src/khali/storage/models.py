@@ -30,6 +30,23 @@ class TradeRecord(Base):
     realized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
 
 
+class BotState(Base):
+    """봇 포지션 상태 (재시작 복구용 싱글턴, id=1)."""
+
+    __tablename__ = "bot_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market: Mapped[str] = mapped_column(String(20))
+    mode: Mapped[str] = mapped_column(String(10))
+    cash_krw: Mapped[float] = mapped_column(Float)
+    coin_volume: Mapped[float] = mapped_column(Float)
+    entry_price: Mapped[float] = mapped_column(Float)
+    high_price: Mapped[float] = mapped_column(Float)
+    realized_pnl_total: Mapped[float] = mapped_column(Float, default=0.0)
+    consecutive_losses: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class EquitySnapshot(Base):
     __tablename__ = "equity_snapshots"
 

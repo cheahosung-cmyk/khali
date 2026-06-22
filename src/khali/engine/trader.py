@@ -75,11 +75,32 @@ class Trader:
         self.client.get_balances()
         return True
 
+    def restore_state(self) -> bool:
+        """저장된 포지션 상태를 복구 (재시작 대비). 복구 시 True."""
+        st = TradeRepository.load_state(self.s.market, self.s.order_mode.value)
+        if not st:
+            return False
+        self.portfolio.cash_krw = st["cash_krw"]
+        self.portfolio.coin_volume = st["coin_volume"]
+        self.portfolio.entry_price = st["entry_price"]
+        self.portfolio.high_price = st["high_price"]
+        self.portfolio.realized_pnl_total = st["realized_pnl_total"]
+        self.portfolio.consecutive_losses = st["consecutive_losses"]
+        logger.info("이전 상태 복구: 현금 %.0f, 코인 %.6f",
+                    self.portfolio.cash_krw, self.portfolio.coin_volume)
+        return True
+
     def start(self) -> None:
         if self.running:
             return
         if self.s.order_mode == OrderMode.LIVE and not self.has_keys:
             raise RuntimeError("live 모드는 API 키가 필요합니다 (로그인 또는 .env).")
+        # paper/live 는 재시작 시 이전 포지션 상태를 복구 (백테스트 제외)
+        if self.s.order_mode != OrderMode.BACKTEST:
+            try:
+                self.restore_state()
+            except Exception as e:
+                logger.warning("상태 복구 실패(무시): %s", e)
         self._stop.clear()
         self.running = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -152,13 +173,18 @@ class Trader:
         self.last_reason = decision.reason
         self.last_update = datetime.now(timezone.utc)
 
-        # 자산 스냅샷 기록
+        # 자산 스냅샷 기록 + 포지션 상태 영속화 (재시작 복구용)
         TradeRepository.add_equity(
             cash_krw=self.portfolio.cash_krw,
             position_value=self.portfolio.position_value(price),
             total_value=self.portfolio.total_value(price),
             mode=self.s.order_mode.value,
         )
+        if self.s.order_mode != OrderMode.BACKTEST:
+            TradeRepository.save_state(
+                market=self.s.market, mode=self.s.order_mode.value,
+                portfolio=self.portfolio,
+            )
 
     def _execute(self, decision, price: float) -> None:
         if decision.type == DecisionType.BUY:

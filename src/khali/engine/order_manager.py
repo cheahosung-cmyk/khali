@@ -43,6 +43,8 @@ class OrderManager:
     # ────────────────────── 매수 ──────────────────────
     def buy(self, market: str, krw_amount: float, price: float) -> OrderResult:
         if self.simulated:
+            # 보유 현금을 초과하는 주문 방지 (반올림/사이징 오차로 음수 현금 차단)
+            krw_amount = min(krw_amount, self.portfolio.cash_krw)
             fill = price * (1 + self.slippage_pct)  # 매수는 불리하게 +슬리피지
             fee = krw_amount * self.fee_rate
             volume = (krw_amount - fee) / fill
