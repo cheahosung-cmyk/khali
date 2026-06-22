@@ -90,12 +90,17 @@ class OrderManager:
         result = self.client.execute_buy(market, krw_amount, price)
         if result.volume:
             self.portfolio.apply_buy(result.price, result.volume, result.paid_krw)
+        else:
+            logger.warning("매수 미체결: %s (요청 %.0f원)", market, krw_amount)
         return result
 
     def _live_sell(self, market: str, volume: float, price: float) -> OrderResult:
         if not self.client:
             raise RuntimeError("live 모드인데 거래소 클라이언트가 없습니다.")
         result = self.client.execute_sell(market, volume, price)
+        if result.volume and abs(result.volume - volume) / volume > 0.02:
+            logger.warning("부분체결 매도: %s 요청 %.6f 체결 %.6f",
+                           market, volume, result.volume)
         if result.volume:
             self.portfolio.apply_sell(result.price, result.volume, result.paid_krw)
         return result

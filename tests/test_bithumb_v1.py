@@ -36,6 +36,22 @@ def test_private_call_requires_keys():
         assert "키" in str(e)
 
 
+def test_parse_contracts_weighted_avg_and_fee():
+    detail = {"status": "0000", "data": {"contract": [
+        {"units": "10", "price": "1700", "fee": "6.8"},
+        {"units": "5", "price": "1710", "fee": "3.4"},
+    ]}}
+    units, avg, fee = BithumbV1Client._parse_contracts(detail)
+    assert units == 15
+    assert abs(avg - (10 * 1700 + 5 * 1710) / 15) < 1e-6
+    assert abs(fee - 10.2) < 1e-9
+
+
+def test_parse_contracts_empty():
+    assert BithumbV1Client._parse_contracts({"data": {}}) == (0.0, 0.0, 0.0)
+    assert BithumbV1Client._parse_contracts({}) == (0.0, 0.0, 0.0)
+
+
 def test_factory_selects_version():
     from khali.exchange.bithumb_client import BithumbClient
 

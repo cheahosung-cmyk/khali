@@ -217,6 +217,7 @@ STOP_LOSS_PCT=0.02
 
 ```bash
 khali rotate                                   # 기본: lookback 90일, 월간 리밸런스
+khali rotate --top-n 3                          # 상위 3개 균등분산 (MDD 완화)
 khali rotate --lookback 60 --rebalance 14      # 더 민감하게
 khali rotate --no-regime                        # BTC 레짐 게이트 끄고 비교
 ```

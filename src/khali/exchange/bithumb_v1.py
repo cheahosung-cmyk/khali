@@ -164,41 +164,75 @@ class BithumbV1Client(ExchangeClient):
             )
         return balances
 
+    def _order_detail(self, order_id: str, type_: str, order: str, payment: str) -> dict:
+        return self._private_post(
+            "/info/order_detail",
+            {"order_id": order_id, "type": type_,
+             "order_currency": order, "payment_currency": payment},
+        )
+
+    @staticmethod
+    def _parse_contracts(detail: dict) -> tuple[float, float, float]:
+        """체결 상세 -> (총수량, 가중평균단가, 총수수료). 없으면 (0,0,0)."""
+        data = detail.get("data") or {}
+        contracts = data.get("contract") or []
+        total_units = 0.0
+        total_funds = 0.0
+        total_fee = 0.0
+        for c in contracts:
+            units = abs(float(c.get("units") or 0))
+            price = float(c.get("price") or 0)
+            total_units += units
+            total_funds += units * price
+            total_fee += float(c.get("fee") or 0)
+        avg = (total_funds / total_units) if total_units else 0.0
+        return total_units, avg, total_fee
+
+    def _filled(
+        self, order_id: str, type_: str, order: str, payment: str,
+        fallback_units: float, ref_price: float,
+    ) -> tuple[float, float, float]:
+        """체결 결과 조회(재시도). 실패 시 참고가 기반 추정으로 폴백."""
+        for _ in range(4):
+            try:
+                detail = self._order_detail(order_id, type_, order, payment)
+                units, avg, fee = self._parse_contracts(detail)
+                if units > 0:
+                    return units, avg, fee
+            except BithumbV1Error:
+                pass
+            time.sleep(0.3)
+        return fallback_units, ref_price, 0.0   # 폴백
+
     def execute_buy(self, market: str, krw_amount: float, ref_price: float) -> OrderResult:
         order, payment = _to_pair(market)
         # 1.0 시장가 매수는 'units'(수량) 기준 -> 참고가로 환산
-        units = round(krw_amount / ref_price, 4) if ref_price else 0.0
+        est_units = round(krw_amount / ref_price, 4) if ref_price else 0.0
         body = self._private_post(
             "/trade/market_buy",
-            {"units": units, "order_currency": order, "payment_currency": payment},
+            {"units": est_units, "order_currency": order, "payment_currency": payment},
         )
+        oid = str(body.get("order_id", ""))
+        units, avg, fee = self._filled(oid, "bid", order, payment, est_units, ref_price)
         return OrderResult(
-            uuid=str(body.get("order_id", "")),
-            market=market,
-            side=Side.BUY,
-            price=ref_price,
-            volume=units,
-            paid_krw=units * ref_price,
-            fee=units * ref_price * 0.0,  # 실수수료는 체결내역 조회 필요
-            created_at=datetime.now(timezone.utc),
-            simulated=False,
+            uuid=oid, market=market, side=Side.BUY,
+            price=avg or ref_price, volume=units,
+            paid_krw=units * (avg or ref_price) + fee, fee=fee,
+            created_at=datetime.now(timezone.utc), simulated=False,
         )
 
     def execute_sell(self, market: str, volume: float, ref_price: float) -> OrderResult:
         order, payment = _to_pair(market)
-        units = round(volume, 4)
+        est_units = round(volume, 4)
         body = self._private_post(
             "/trade/market_sell",
-            {"units": units, "order_currency": order, "payment_currency": payment},
+            {"units": est_units, "order_currency": order, "payment_currency": payment},
         )
+        oid = str(body.get("order_id", ""))
+        units, avg, fee = self._filled(oid, "ask", order, payment, est_units, ref_price)
         return OrderResult(
-            uuid=str(body.get("order_id", "")),
-            market=market,
-            side=Side.SELL,
-            price=ref_price,
-            volume=units,
-            paid_krw=units * ref_price,
-            fee=0.0,
-            created_at=datetime.now(timezone.utc),
-            simulated=False,
+            uuid=oid, market=market, side=Side.SELL,
+            price=avg or ref_price, volume=units,
+            paid_krw=units * (avg or ref_price) - fee, fee=fee,
+            created_at=datetime.now(timezone.utc), simulated=False,
         )

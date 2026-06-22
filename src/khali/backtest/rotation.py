@@ -49,6 +49,7 @@ class RotationBacktester:
         rebalance_days: int = 7,
         regime_ma: int = 50,
         use_regime: bool = True,
+        top_n: int = 1,
     ) -> RotationResult:
         symbols = list(candles_by_symbol)
         price_maps = {s: _date_map(c) for s, c in candles_by_symbol.items()}
@@ -64,8 +65,7 @@ class RotationBacktester:
             raise ValueError("데이터가 부족합니다.")
 
         cash = self.s.base_capital_krw
-        held: str | None = None
-        units = 0.0
+        holdings_units: dict[str, float] = {}   # symbol -> units (동시 N개 보유)
         cost = (self.s.fee_rate + self.s.slippage_pct)
 
         equity: list[float] = []
@@ -75,7 +75,6 @@ class RotationBacktester:
         cash_days = 0
         holdings: list[str] = []
 
-        # BTC MA 조회용: 날짜 -> 인덱스
         btc_idx = {d: i for i, d in enumerate(btc_dates)}
 
         def btc_bull(d) -> bool:
@@ -92,42 +91,51 @@ class RotationBacktester:
                 return -1e9
             return p1 / p0 - 1
 
+        def portfolio_value(d) -> float:
+            return cash + sum(u * price_maps[s][d] for s, u in holdings_units.items())
+
         start = lookback
         for k in range(start, len(dates)):
             d = dates[k]
-            # 현재 보유 평가
-            cur_price = price_maps[held].get(d) if held else None
-            value = cash + (units * cur_price if held and cur_price else 0.0)
 
-            # 리밸런스 시점인가
             if (k - start) % rebalance_days == 0:
                 prev_d = dates[k - lookback]
                 bull = btc_bull(d) if use_regime else True
-                if not bull:
-                    target = None  # 현금
-                else:
+                targets = []
+                if bull:
                     ranked = sorted(symbols, key=lambda s: momentum(s, d, prev_d), reverse=True)
-                    target = ranked[0]
+                    targets = ranked[:top_n]
+                equity_now = portfolio_value(d)
+                target_val = (equity_now / len(targets)) if targets else 0.0
 
-                if target != held:
-                    # 청산
-                    if held and cur_price:
-                        cash += units * cur_price * (1 - cost)
-                        units = 0.0
-                        held = None
-                    # 신규 진입
-                    if target:
-                        tp = price_maps[target].get(d)
-                        if tp:
-                            units = (cash * (1 - cost)) / tp
-                            cash = 0.0
-                            held = target
-                    rebalances += 1
-                value = cash + (units * (price_maps[held].get(d) if held else 0) if held else 0.0)
+                # 1) 타깃에서 빠진 코인 전량 매도
+                for s in list(holdings_units):
+                    if s not in targets:
+                        cash += holdings_units[s] * price_maps[s][d] * (1 - cost)
+                        del holdings_units[s]
+                        rebalances += 1
+                # 2) 과보유분 매도 (균등비중 초과)
+                for s in targets:
+                    cur_val = holdings_units.get(s, 0.0) * price_maps[s][d]
+                    if cur_val > target_val:
+                        sell_units = (cur_val - target_val) / price_maps[s][d]
+                        cash += sell_units * price_maps[s][d] * (1 - cost)
+                        holdings_units[s] -= sell_units
+                        rebalances += 1
+                # 3) 부족분 매수 (현금 한도 내)
+                for s in targets:
+                    cur_val = holdings_units.get(s, 0.0) * price_maps[s][d]
+                    if cur_val < target_val:
+                        spend = min(target_val - cur_val, cash)
+                        if spend > 0:
+                            holdings_units[s] = holdings_units.get(s, 0.0) + spend * (1 - cost) / price_maps[s][d]
+                            cash -= spend
+                            rebalances += 1
 
-            if held is None:
+            if not holdings_units:
                 cash_days += 1
-            holdings.append(held or "CASH")
+            holdings.append("+".join(sorted(holdings_units)) or "CASH")
+            value = portfolio_value(d)
             equity.append(value)
             peak = max(peak, value)
             if peak:

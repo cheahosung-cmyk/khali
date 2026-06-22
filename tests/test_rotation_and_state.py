@@ -23,6 +23,20 @@ def test_rotation_picks_strongest_and_beats_weak(settings):
     assert "STRONG" in r.holdings_log
 
 
+def test_rotation_top_n_holds_multiple(settings):
+    n = 200
+    a = _series([100 + i * 3 for i in range(n)])    # 강함
+    b = _series([100 + i * 2 for i in range(n)])    # 중간
+    cc = _series([100 + i * 1 for i in range(n)])   # 약함
+    btc = _series([100 + i for i in range(n)])
+    rb = RotationBacktester(settings)
+    r = rb.run({"A": a, "B": b, "C": cc}, btc,
+               lookback=30, rebalance_days=30, regime_ma=20, use_regime=True, top_n=2)
+    last = r.holdings_log[-1]            # 상위 2개 동시 보유
+    assert "+" in last and len(last.split("+")) == 2
+    assert r.final_value > 0
+
+
 def test_rotation_regime_gate_goes_cash_in_bear(settings):
     n = 200
     coin = _series([100 - i * 0.2 for i in range(n)])

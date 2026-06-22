@@ -246,10 +246,11 @@ def cmd_rotate(args) -> None:
     rb = RotationBacktester(settings)
     r = rb.run(
         data, btc, lookback=args.lookback, rebalance_days=args.rebalance,
-        regime_ma=args.regime_ma, use_regime=not args.no_regime,
+        regime_ma=args.regime_ma, use_regime=not args.no_regime, top_n=args.top_n,
     )
-    print(f"\n로테이션 백테스트 (코인 {len(symbols)}종, lookback={args.lookback}일, "
-          f"리밸런스 {args.rebalance}일, BTC레짐 {'OFF' if args.no_regime else 'ON'})")
+    print(f"\n로테이션 백테스트 (코인 {len(symbols)}종, 동시보유 top{args.top_n}, "
+          f"lookback={args.lookback}일, 리밸런스 {args.rebalance}일, "
+          f"BTC레짐 {'OFF' if args.no_regime else 'ON'})")
     print(f"  {r.summary()}")
     print("\n  [비교] 매수후보유:")
     for s in symbols:
@@ -326,6 +327,7 @@ def main() -> None:
     ro.add_argument("--rebalance", type=int, default=30, help="리밸런스 주기(일)")
     ro.add_argument("--regime-ma", type=int, default=50, help="BTC 레짐 MA 기간")
     ro.add_argument("--no-regime", action="store_true", help="BTC 레짐 게이트 끄기")
+    ro.add_argument("--top-n", type=int, default=1, help="동시 보유 코인 수(균등분산)")
     ro.add_argument("--count", type=int, default=1500, help="사용할 일봉 개수")
 
     sub.add_parser("run", help="헤드리스 매매 루프")

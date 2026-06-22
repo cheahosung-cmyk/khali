@@ -194,6 +194,11 @@ class RotationTrader:
             self.last_action, self.last_reason = "hold", f"현금 부족({krw:.0f}원)"
             return
         res = self.order_mgr.buy(f"KRW-{symbol}", krw, price)
+        # 체결 검증: 체결수량 0이면 보유로 간주하지 않음 (미체결/거부)
+        if res.volume <= 0:
+            self.last_action, self.last_reason = "hold", f"{symbol} 주문 미체결"
+            self.notifier.send(f"⚠️ Khali {symbol} 매수 미체결 — 보유 안 함")
+            return
         self.held_symbol = symbol
         self._record("buy", symbol, res.price, res.volume, 0.0, reason)
 
