@@ -60,7 +60,8 @@ def test_rotation_notifies_on_entry():
                             {"AAA": 220, "BBB": 106, "BTC": 160})
         s = Settings(api_version=1, order_mode=OrderMode.PAPER, engine="rotation",
                      base_capital_krw=50000, rotation_basket="AAA,BBB",
-                     rotation_regime_ma=20, database_url=f"sqlite:///{os.path.join(d,'n.db')}")
+                     rotation_regime_ma=20, rotation_lookback=30,
+                     database_url=f"sqlite:///{os.path.join(d,'n.db')}")
         t = RotationTrader(s, client)
         spy = SpyNotifier(); t.notifier = spy
         t.step()

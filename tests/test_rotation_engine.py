@@ -47,7 +47,7 @@ def _settings(db, **kw):
     return Settings(
         api_version=1, order_mode=OrderMode.PAPER, engine="rotation",
         base_capital_krw=50000, fee_rate=0.0004, slippage_pct=0.0,
-        rotation_basket="AAA,BBB", rotation_regime_ma=20,
+        rotation_basket="AAA,BBB", rotation_regime_ma=20, rotation_lookback=30,
         rotation_rebalance_days=30, database_url=f"sqlite:///{db}", **kw,
     )
 

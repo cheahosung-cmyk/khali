@@ -17,7 +17,6 @@ import logging
 import threading
 from datetime import datetime, timezone
 
-from ..analysis.scanner import score_market
 from ..config import OrderMode, Settings
 from ..exchange.base import ExchangeClient
 from ..exchange.factory import create_client
@@ -144,12 +143,21 @@ class RotationTrader:
         return ma is not None and closes[-1] > ma
 
     def _rank_top(self) -> str | None:
-        best, best_score = None, float("-inf")
+        """백테스트(RotationBacktester)와 동일한 lookback 순수 모멘텀으로 1위 선정.
+
+        과거에는 score_market(고정 30일+MA복합)을 썼으나, 백테스트가 검증한
+        rotation_lookback 모멘텀과 신호가 달라 정합성 결함이 있었다. 이제 일치시킨다.
+        """
+        lookback = self.s.rotation_lookback
+        best, best_mom = None, float("-inf")
         for sym in self.s.basket_list:
             try:
-                sc = score_market(self.client, sym)
-                if sc and sc.score > best_score:
-                    best, best_score = sym, sc.score
+                closes = [c.close for c in self.client.get_candles(f"KRW-{sym}", 1440, lookback + 5)]
+                if len(closes) < lookback + 1:
+                    continue
+                mom = closes[-1] / closes[-1 - lookback] - 1   # lookback일 모멘텀
+                if mom > best_mom:
+                    best, best_mom = sym, mom
             except Exception:
                 continue
         return best
