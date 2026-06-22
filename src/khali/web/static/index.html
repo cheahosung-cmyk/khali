@@ -39,6 +39,7 @@
 <header>
   <h1>Khali · 빗썸 자동매매</h1>
   <span id="mode" class="mode">-</span>
+  <span id="regime" class="mode" style="display:none"></span>
   <span id="market" style="color:#9aa4b2;font-size:13px"></span>
 </header>
 <main>
@@ -79,6 +80,11 @@
   <div class="status-line" id="action"></div>
   <div class="err" id="err"></div>
 
+  <h3>자산 추이</h3>
+  <div class="card" style="padding:10px">
+    <canvas id="equityChart" height="160" style="width:100%;display:block"></canvas>
+  </div>
+
   <h3>최근 거래</h3>
   <table>
     <thead><tr><th>시각</th><th>구분</th><th>가격</th><th>수량</th>
@@ -115,7 +121,15 @@ async function refresh() {
     const m = document.getElementById('mode');
     m.textContent = (s.mode || '').toUpperCase();
     m.className = 'mode ' + (s.mode || '');
-    document.getElementById('market').textContent = s.market + ' · ' + s.strategy;
+    // 레짐 신호등 (로테이션 엔진에서만 제공)
+    const rg = document.getElementById('regime');
+    if (s.regime && s.regime !== '?') {
+      const map = {bull:['🟢 상승','#15803d'], bear:['🔴 하락','#b91c1c'], mixed:['🟡 혼조','#a16207']};
+      const [txt, col] = map[s.regime] || ['?', '#4b5563'];
+      rg.textContent = 'BTC ' + txt; rg.style.background = col; rg.style.display = '';
+    } else { rg.style.display = 'none'; }
+    document.getElementById('market').textContent = s.market + ' · ' + s.strategy
+      + (s.killed ? ' · ⛔킬스위치' : '');
     document.getElementById('total').textContent = won(s.total_value);
     const pnl = document.getElementById('pnl');
     pnl.textContent = (s.pnl_total >= 0 ? '+' : '') + won(s.pnl_total)
@@ -149,7 +163,41 @@ async function refresh() {
           ${t.side === 'sell' ? won(Math.round(t.realized_pnl)) : '-'}</td>
         <td style="text-align:left;color:#9aa4b2">${t.reason || ''}</td>
       </tr>`).join('');
+
+    const eq = await (await api('/api/equity')).json();
+    drawEquity(eq);
   } catch (e) { console.error(e); }
+}
+
+function drawEquity(points) {
+  const cv = document.getElementById('equityChart');
+  const ctx = cv.getContext('2d');
+  const w = cv.width = cv.clientWidth, h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  if (!points || points.length < 2) {
+    ctx.fillStyle = '#9aa4b2'; ctx.font = '13px sans-serif';
+    ctx.fillText('데이터 누적 중...', 12, h / 2); return;
+  }
+  const vals = points.map(p => p.total);
+  const min = Math.min(...vals), max = Math.max(...vals), pad = 8;
+  const range = (max - min) || 1;
+  const x = i => pad + i * (w - 2 * pad) / (points.length - 1);
+  const y = v => h - pad - (v - min) / range * (h - 2 * pad);
+  const up = vals[vals.length - 1] >= vals[0];
+  const col = up ? '#22c55e' : '#ef4444';
+  // 면적
+  ctx.beginPath(); ctx.moveTo(x(0), y(vals[0]));
+  vals.forEach((v, i) => ctx.lineTo(x(i), y(v)));
+  ctx.lineTo(x(vals.length - 1), h - pad); ctx.lineTo(x(0), h - pad); ctx.closePath();
+  ctx.fillStyle = up ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)'; ctx.fill();
+  // 선
+  ctx.beginPath(); ctx.moveTo(x(0), y(vals[0]));
+  vals.forEach((v, i) => ctx.lineTo(x(i), y(v)));
+  ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+  // 최저/최고 라벨
+  ctx.fillStyle = '#9aa4b2'; ctx.font = '11px sans-serif';
+  ctx.fillText(Math.round(max).toLocaleString('ko-KR'), 6, 12);
+  ctx.fillText(Math.round(min).toLocaleString('ko-KR'), 6, h - 4);
 }
 async function ctl(action) {
   await api('/api/' + action, { method: 'POST' });
