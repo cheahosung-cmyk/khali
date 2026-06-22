@@ -167,6 +167,37 @@ def cmd_check(args) -> None:
         raise SystemExit(1)
 
 
+def cmd_regime(args) -> None:
+    """현재 시장 추세(레짐) 진단 — 지금이 매수 우위 장세인지 판단 보조."""
+    from .exchange.factory import create_client
+    from .strategies.indicators import sma
+
+    settings = get_settings()
+    client = create_client(settings.api_version)
+    daily = client.get_candles(settings.market, 1440, 200)
+    client.close()
+    closes = [c.close for c in daily]
+    price = closes[-1]
+    ma50 = sma(closes, 50)
+    ma200 = sma(closes, 200) if len(closes) >= 200 else None
+
+    print(f"\n{settings.market} 현재가 {price:,.0f}원")
+    if ma50:
+        print(f"  MA50  {ma50:,.0f}원 → 가격이 {'위 ▲' if price > ma50 else '아래 ▼'}")
+    if ma200:
+        print(f"  MA200 {ma200:,.0f}원 → 가격이 {'위 ▲' if price > ma200 else '아래 ▼'}")
+
+    bull = ma50 and ma200 and price > ma50 > ma200
+    bear = ma50 and ma200 and price < ma50 < ma200
+    if bull:
+        verdict = "🟢 상승 추세 — 롱 전략에 우호적. paper로 검증 후 소액 live 고려"
+    elif bear:
+        verdict = "🔴 하락 추세 — 롱 전용 전략은 수익 어려움. 현금 보유/대기 권장"
+    else:
+        verdict = "🟡 횡보/혼조 — 신중히. 변동성돌파로 작게, 손절 엄격히"
+    print(f"\n  진단: {verdict}")
+
+
 def cmd_run(args) -> None:
     from .engine.trader import Trader
     from .storage.db import init_db
@@ -221,6 +252,7 @@ def main() -> None:
     wf.add_argument("--count", type=int, default=5000, help="사용할 캔들 개수")
 
     sub.add_parser("check", help="실거래 연결 self-check (주문 없음)")
+    sub.add_parser("regime", help="현재 시장 추세 진단 (매수 우위 장세인지)")
     sub.add_parser("run", help="헤드리스 매매 루프")
 
     args = parser.parse_args()
@@ -231,6 +263,7 @@ def main() -> None:
         "optimize": cmd_optimize,
         "walkforward": cmd_walkforward,
         "check": cmd_check,
+        "regime": cmd_regime,
         "run": cmd_run,
     }[command](args)
 
