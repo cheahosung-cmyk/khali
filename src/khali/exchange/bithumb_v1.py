@@ -25,6 +25,7 @@ import httpx
 
 from .base import ExchangeClient
 from .models import Balance, Candle, OrderResult, Side, Ticker
+from .ratelimit import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ class BithumbV1Client(ExchangeClient):
         self._key = access_key
         self._secret = secret_key
         self._client = httpx.Client(base_url=base_url, timeout=timeout)
+        self._rate = RateLimiter()
 
     def close(self) -> None:
         self._client.close()
@@ -82,6 +84,7 @@ class BithumbV1Client(ExchangeClient):
         params = dict(params or {})
         params["endpoint"] = endpoint
         nonce = str(int(time.time() * 1000))
+        self._rate.wait()
         headers = {
             "Api-Key": self._key,
             "Api-Nonce": nonce,
@@ -98,6 +101,7 @@ class BithumbV1Client(ExchangeClient):
         return body
 
     def _public_get(self, path: str) -> dict:
+        self._rate.wait()
         try:
             resp = self._client.get(path)
         except httpx.HTTPError as e:

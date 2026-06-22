@@ -60,6 +60,22 @@ class Settings(BaseSettings):
 
     # ── 엔진 ──
     poll_interval_sec: int = Field(default=10, alias="POLL_INTERVAL_SEC")
+    # 엔진 선택: single(단일코인 전략) | rotation(멀티코인 상대강도 로테이션)
+    engine: str = Field(default="single", alias="ENGINE")
+    # 킬스위치: 평가자산이 고점 대비 이 비율 하락하면 전량청산+정지 (0=off)
+    max_drawdown_stop_pct: float = Field(default=0.0, alias="MAX_DRAWDOWN_STOP_PCT")
+
+    # ── 로테이션 엔진 ──
+    rotation_basket: str = Field(
+        default="BTC,ETH,XRP,SOL,ADA,DOGE,TRX,LINK", alias="ROTATION_BASKET"
+    )
+    rotation_lookback: int = Field(default=90, alias="ROTATION_LOOKBACK")
+    rotation_rebalance_days: int = Field(default=30, alias="ROTATION_REBALANCE_DAYS")
+    rotation_regime_ma: int = Field(default=50, alias="ROTATION_REGIME_MA")
+
+    @property
+    def basket_list(self) -> list[str]:
+        return [s.strip().upper() for s in self.rotation_basket.split(",") if s.strip()]
 
     # ── 웹 ──
     host: str = Field(default="127.0.0.1", alias="HOST")

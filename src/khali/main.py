@@ -261,12 +261,13 @@ def cmd_rotate(args) -> None:
 
 
 def cmd_run(args) -> None:
-    from .engine.trader import Trader
+    from .engine.factory import create_engine
     from .storage.db import init_db
 
     settings = get_settings()
     init_db(settings.database_url)
-    trader = Trader(settings)
+    print(f"엔진: {settings.engine}")
+    trader = create_engine(settings)
     if settings.order_mode.value == "live":
         print("⚠️  LIVE 모드입니다. 실제 주문이 실행됩니다. Ctrl+C 로 중단.")
     trader.start()
@@ -274,7 +275,8 @@ def cmd_run(args) -> None:
         while True:
             time.sleep(10)
             s = trader.status()
-            print(f"[{s['mode']}] {s['market']} {s['last_price']:.1f} | "
+            extra = f"가격 {s['last_price']:,.1f} " if s.get("last_price") else ""
+            print(f"[{s['mode']}/{s.get('engine','single')}] {s['market']} {extra}| "
                   f"평가 {s['total_value']:,}원 ({s['pnl_pct']:+.2f}%) | "
                   f"{s['last_action']} - {s['last_reason']}")
     except KeyboardInterrupt:

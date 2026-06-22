@@ -123,6 +123,23 @@ class TradeRepository:
             }
 
     @staticmethod
+    def load_state_by_mode(mode: str) -> dict | None:
+        """mode 만으로 상태 복구 (로테이션 엔진용 — 보유 코인이 바뀌므로)."""
+        with get_session() as s:
+            st = s.get(BotState, 1)
+            if st is None or st.mode != mode:
+                return None
+            return {
+                "market": st.market,
+                "cash_krw": st.cash_krw,
+                "coin_volume": st.coin_volume,
+                "entry_price": st.entry_price,
+                "high_price": st.high_price,
+                "realized_pnl_total": st.realized_pnl_total,
+                "consecutive_losses": st.consecutive_losses,
+            }
+
+    @staticmethod
     def equity_curve(limit: int = 500) -> list[dict]:
         with get_session() as s:
             rows = s.scalars(

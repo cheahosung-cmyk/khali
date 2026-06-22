@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings
-from ..engine.trader import Trader
+from ..engine.factory import create_engine
 from ..storage.db import init_db
 from ..storage.repositories import TradeRepository
 
@@ -39,7 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     init_db(settings.database_url)
 
     app = FastAPI(title="Khali 빗썸 자동매매")
-    trader = Trader(settings)
+    trader = create_engine(settings)
     app.state.trader = trader
 
     @app.get("/", response_class=HTMLResponse)

@@ -23,6 +23,7 @@ import jwt
 
 from .base import ExchangeClient
 from .models import Balance, Candle, OrderResult, Side, Ticker
+from .ratelimit import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ class BithumbClient(ExchangeClient):
         self._access_key = access_key
         self._secret_key = secret_key
         self._client = httpx.Client(base_url=base_url, timeout=timeout)
+        self._rate = RateLimiter()
 
     def close(self) -> None:
         self._client.close()
@@ -78,6 +80,7 @@ class BithumbClient(ExchangeClient):
         self, method: str, path: str, *, params=None, auth=False
     ) -> dict | list:
         headers = self._auth_header(params) if auth else {}
+        self._rate.wait()
         try:
             if method == "GET":
                 resp = self._client.get(path, params=params, headers=headers)
