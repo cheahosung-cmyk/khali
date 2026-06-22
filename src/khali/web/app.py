@@ -12,10 +12,11 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings
@@ -38,9 +39,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     init_db(settings.database_url)
 
-    app = FastAPI(title="Khali 빗썸 자동매매")
     trader = create_engine(settings)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        yield
+        trader.stop()
+
+    app = FastAPI(title="Khali 빗썸 자동매매", lifespan=lifespan)
     app.state.trader = trader
+
+    if settings.host == "0.0.0.0" and not settings.dashboard_token:
+        logger.warning(
+            "⚠️ 대시보드가 0.0.0.0(외부)에 노출되는데 DASHBOARD_TOKEN 이 없습니다! "
+            "누구나 키 입력·봇 조작 가능. .env 에 DASHBOARD_TOKEN 을 설정하세요."
+        )
+
+    @app.middleware("http")
+    async def _auth(request: Request, call_next):
+        # 토큰이 설정된 경우에만 /api/* 보호 (대시보드 페이지는 열려서 토큰 입력 가능)
+        path = request.url.path
+        if (
+            settings.dashboard_token
+            and path.startswith("/api/")
+            and path != "/api/config"   # 인증 필요 여부 안내용 (토큰 전 접근)
+        ):
+            if request.headers.get("X-Auth-Token") != settings.dashboard_token:
+                return JSONResponse({"detail": "unauthorized"}, status_code=401)
+        return await call_next(request)
+
+    @app.get("/api/config")
+    def config() -> dict:
+        return {"auth_required": bool(settings.dashboard_token), "engine": settings.engine}
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
@@ -88,9 +118,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def stop() -> dict:
         trader.stop()
         return {"ok": True, "running": trader.running}
-
-    @app.on_event("shutdown")
-    def _shutdown() -> None:
-        trader.stop()
 
     return app

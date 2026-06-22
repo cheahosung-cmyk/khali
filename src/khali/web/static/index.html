@@ -89,9 +89,29 @@
 
 <script>
 const won = n => (n ?? 0).toLocaleString('ko-KR') + '원';
+
+// ── 인증: 토큰이 필요하면 저장된 토큰을 모든 요청에 첨부 ──
+let AUTH_REQUIRED = false;
+function token() { return localStorage.getItem('khali_token') || ''; }
+async function api(path, opts = {}) {
+  opts.headers = Object.assign({}, opts.headers, AUTH_REQUIRED ? { 'X-Auth-Token': token() } : {});
+  const r = await fetch(path, opts);
+  if (r.status === 401) {
+    const t = prompt('대시보드 접근 토큰을 입력하세요 (DASHBOARD_TOKEN):', '');
+    if (t) { localStorage.setItem('khali_token', t); return api(path, opts); }
+  }
+  return r;
+}
+async function initAuth() {
+  try {
+    const cfg = await (await fetch('/api/config')).json();
+    AUTH_REQUIRED = !!cfg.auth_required;
+  } catch (e) {}
+}
+
 async function refresh() {
   try {
-    const s = await (await fetch('/api/status')).json();
+    const s = await (await api('/api/status')).json();
     const m = document.getElementById('mode');
     m.textContent = (s.mode || '').toUpperCase();
     m.className = 'mode ' + (s.mode || '');
@@ -117,7 +137,7 @@ async function refresh() {
     document.getElementById('startBtn').title = needKey
       ? 'live 모드는 먼저 API 키 로그인이 필요합니다' : '';
 
-    const trades = await (await fetch('/api/trades?limit=30')).json();
+    const trades = await (await api('/api/trades?limit=30')).json();
     document.getElementById('trades').innerHTML = trades.map(t => `
       <tr>
         <td>${new Date(t.ts).toLocaleString('ko-KR')}</td>
@@ -132,7 +152,7 @@ async function refresh() {
   } catch (e) { console.error(e); }
 }
 async function ctl(action) {
-  await fetch('/api/' + action, { method: 'POST' });
+  await api('/api/' + action, { method: 'POST' });
   refresh();
 }
 async function login() {
@@ -141,7 +161,7 @@ async function login() {
   const errEl = document.getElementById('loginErr');
   errEl.textContent = '';
   if (!ak || !sk) { errEl.textContent = 'Key 를 모두 입력하세요.'; return; }
-  const r = await (await fetch('/api/login', {
+  const r = await (await api('/api/login', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ access_key: ak, secret_key: sk })
   })).json();
@@ -150,11 +170,10 @@ async function login() {
   refresh();
 }
 async function logout() {
-  await fetch('/api/logout', { method: 'POST' });
+  await api('/api/logout', { method: 'POST' });
   refresh();
 }
-refresh();
-setInterval(refresh, 3000);
+(async () => { await initAuth(); refresh(); setInterval(refresh, 5000); })();
 </script>
 </body>
 </html>

@@ -46,6 +46,9 @@ class RotationTrader:
         self.last_rebalance: datetime | None = None
         self.peak_equity = settings.base_capital_krw
         self.killed = False
+        # status() 가 네트워크 없이 읽도록 루프에서 갱신하는 캐시
+        self.last_equity = settings.base_capital_krw
+        self.last_price = 0.0
 
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -143,30 +146,54 @@ class RotationTrader:
 
     def _equity(self) -> float:
         if self.held_symbol and self.portfolio.has_position:
-            return self.portfolio.cash_krw + self.portfolio.coin_volume * self._price(self.held_symbol)
+            self.last_price = self._price(self.held_symbol)
+            return self.portfolio.cash_krw + self.portfolio.coin_volume * self.last_price
+        self.last_price = 0.0
         return self.portfolio.cash_krw
+
+    def _reconcile_live(self) -> None:
+        """live: 거래소 실제 잔고를 단일 진실원천으로 동기화 (부분체결 대응)."""
+        if self.s.order_mode != OrderMode.LIVE:
+            return
+        balances = self.client.get_balances()
+        krw = next((b for b in balances if b.currency == "KRW"), None)
+        if krw:
+            self.portfolio.cash_krw = krw.total
+        if self.held_symbol:
+            coin = next((b for b in balances if b.currency == self.held_symbol), None)
+            self.portfolio.coin_volume = coin.total if coin else 0.0
+            # 실제 보유 수량이 0이면(외부 매도/미체결) 보유 해제
+            if not self.portfolio.has_position:
+                self.held_symbol = None
+                self.portfolio.entry_price = 0.0
 
     def _go_cash(self, reason: str) -> None:
         if self.held_symbol and self.portfolio.has_position:
             price = self._price(self.held_symbol)
-            self.order_mgr.sell(f"KRW-{self.held_symbol}", self.portfolio.coin_volume, price)
-            self._record("sell", self.held_symbol, price, reason)
+            entry = self.portfolio.entry_price
+            vol = self.portfolio.coin_volume
+            res = self.order_mgr.sell(f"KRW-{self.held_symbol}", vol, price)
+            realized = res.paid_krw - entry * res.volume
+            self._record("sell", self.held_symbol, res.price, res.volume, realized, reason)
         self.held_symbol = None
 
     def _enter(self, symbol: str, reason: str) -> None:
         price = self._price(symbol)
         krw = self.portfolio.cash_krw
         if krw < self.s.min_order_krw:
-            self.last_reason = f"현금 부족({krw:.0f}원)"
+            self.last_action, self.last_reason = "hold", f"현금 부족({krw:.0f}원)"
             return
-        self.order_mgr.buy(f"KRW-{symbol}", krw, price)
+        res = self.order_mgr.buy(f"KRW-{symbol}", krw, price)
         self.held_symbol = symbol
-        self._record("buy", symbol, price, reason)
+        self._record("buy", symbol, res.price, res.volume, 0.0, reason)
 
     def step(self) -> None:
         if self.killed:
             self.last_reason = "킬스위치 발동됨 — 정지 상태"
             return
+
+        # 0) live: 거래소 실제 잔고와 동기화 (부분체결/외부거래 반영)
+        self._reconcile_live()
 
         # 1) 킬스위치: 평가자산이 고점 대비 큰 폭 하락하면 전량청산+정지
         equity = self._equity()
@@ -218,17 +245,21 @@ class RotationTrader:
         self._persist(self._equity())
 
     # ────────────────────── 기록/상태 ──────────────────────
-    def _record(self, side: str, symbol: str, price: float, reason: str) -> None:
+    def _record(
+        self, side: str, symbol: str, price: float, volume: float,
+        realized: float, reason: str,
+    ) -> None:
         TradeRepository.add_trade(
-            market=f"KRW-{symbol}", side=side, price=price,
-            volume=self.portfolio.coin_volume if side == "buy" else 0,
-            krw=self.portfolio.cash_krw, fee=0, mode=self.s.order_mode.value,
-            reason=reason,
+            market=f"KRW-{symbol}", side=side, price=price, volume=volume,
+            krw=price * volume, fee=0, mode=self.s.order_mode.value,
+            reason=reason, realized_pnl=realized,
         )
         self.last_action, self.last_reason = side, reason
-        logger.info("%s %s @ %.2f (%s)", side, symbol, price, reason)
+        logger.info("%s %s vol=%.6f @ %.2f 손익=%.0f (%s)",
+                    side, symbol, volume, price, realized, reason)
 
     def _persist(self, equity: float) -> None:
+        self.last_equity = equity   # status() 캐시 갱신
         TradeRepository.add_equity(
             cash_krw=self.portfolio.cash_krw,
             position_value=equity - self.portfolio.cash_krw,
@@ -236,22 +267,14 @@ class RotationTrader:
         )
         if self.s.order_mode != OrderMode.BACKTEST:
             # held_symbol 을 market 필드에 저장 (보유 코인 추적)
-            prev_market = self.s.market
-            try:
-                self.s.market = self.held_symbol or "CASH"
-                TradeRepository.save_state(
-                    market=self.held_symbol or "CASH",
-                    mode=self.s.order_mode.value, portfolio=self.portfolio,
-                )
-            finally:
-                self.s.market = prev_market
+            TradeRepository.save_state(
+                market=self.held_symbol or "CASH",
+                mode=self.s.order_mode.value, portfolio=self.portfolio,
+            )
 
     def status(self) -> dict:
-        equity = self.portfolio.cash_krw
-        try:
-            equity = self._equity()
-        except Exception:
-            pass
+        # 캐시된 값만 사용 (웹 요청에서 네트워크 호출 금지)
+        equity = self.last_equity
         return {
             "running": self.running,
             "mode": self.s.order_mode.value,
@@ -262,6 +285,7 @@ class RotationTrader:
             "strategy": f"rotation({self.s.rotation_lookback}d)",
             "regime": self.regime,
             "killed": self.killed,
+            "last_price": self.last_price,
             "cash_krw": round(self.portfolio.cash_krw),
             "coin_volume": self.portfolio.coin_volume,
             "total_value": round(equity),

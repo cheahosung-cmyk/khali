@@ -79,6 +79,9 @@ class Settings(BaseSettings):
 
     # ── 웹 ──
     host: str = Field(default="127.0.0.1", alias="HOST")
+    # 대시보드 접근 토큰. 설정 시 모든 API 호출에 X-Auth-Token 필요.
+    # 외부(0.0.0.0) 노출 시 반드시 설정하세요.
+    dashboard_token: str = Field(default="", alias="DASHBOARD_TOKEN")
     port: int = Field(default=8000, alias="PORT")
 
     # ── DB ──
