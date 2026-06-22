@@ -198,6 +198,38 @@ def cmd_regime(args) -> None:
     print(f"\n  진단: {verdict}")
 
 
+def cmd_scan(args) -> None:
+    """멀티코인 상대강도 스캔 + BTC 시장 레짐. '무엇을 거래할지' 판단 보조."""
+    from .analysis.scanner import DEFAULT_BASKET, market_regime, scan
+    from .exchange.factory import create_client
+
+    settings = get_settings()
+    client = create_client(settings.api_version)
+    symbols = args.markets.split(",") if args.markets else DEFAULT_BASKET
+    regime = market_regime(client)
+    rows = scan(client, symbols)
+    client.close()
+
+    reg_txt = {"bull": "🟢 상승", "bear": "🔴 하락", "mixed": "🟡 혼조"}[regime]
+    print(f"\nBTC 시장 레짐: {reg_txt}")
+    if regime != "bull":
+        print("  ⚠️ BTC가 약세 → 알트 롱은 불리. 현금 비중 확대/대기 권장.\n")
+    print(f"  {'순위':<4}{'코인':<6}{'현재가':>13}{'30일':>8}{'vsMA50':>8}"
+          f"{'vsMA200':>9}{'RSI':>6}  추세")
+    medal = {0: "🥇", 1: "🥈", 2: "🥉"}
+    for i, s in enumerate(rows):
+        tag = {"bull": "🟢", "bear": "🔴", "mixed": "🟡"}[s.trend]
+        print(f"  {medal.get(i, str(i+1)):<4}{s.symbol:<6}{s.price:>13,.0f}"
+              f"{s.return_30d_pct:>7.1f}%{s.vs_ma50_pct:>7.1f}%{s.vs_ma200_pct:>8.1f}%"
+              f"{s.rsi14:>6.0f}  {tag}")
+    if rows:
+        top = rows[0]
+        if regime == "bull" and top.trend == "bull":
+            print(f"\n  💡 최강 코인: {top.symbol} (상승추세). MARKET=KRW-{top.symbol} 로 검토.")
+        else:
+            print(f"\n  💡 상대강도 1위는 {top.symbol}이나 시장이 약세 → 적극 진입은 보류.")
+
+
 def cmd_run(args) -> None:
     from .engine.trader import Trader
     from .storage.db import init_db
@@ -253,6 +285,8 @@ def main() -> None:
 
     sub.add_parser("check", help="실거래 연결 self-check (주문 없음)")
     sub.add_parser("regime", help="현재 시장 추세 진단 (매수 우위 장세인지)")
+    sc = sub.add_parser("scan", help="멀티코인 상대강도 스캔 + BTC 레짐")
+    sc.add_argument("--markets", help="쉼표구분 심볼 (예: BTC,ETH,XRP). 생략시 기본 바스켓")
     sub.add_parser("run", help="헤드리스 매매 루프")
 
     args = parser.parse_args()
@@ -264,6 +298,7 @@ def main() -> None:
         "walkforward": cmd_walkforward,
         "check": cmd_check,
         "regime": cmd_regime,
+        "scan": cmd_scan,
         "run": cmd_run,
     }[command](args)
 
