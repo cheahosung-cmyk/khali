@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from ..config import OrderMode, Settings
 from ..exchange.base import ExchangeClient
 from ..exchange.factory import create_client
+from ..notify.telegram import TelegramNotifier
 from ..risk.risk_manager import DayState, DecisionType, RiskManager
 from ..storage.repositories import TradeRepository
 from ..strategies import get_strategy
@@ -53,6 +54,10 @@ class Trader:
         self.last_reason = ""
         self.last_update: datetime | None = None
         self.error: str | None = None
+        self.notifier = TelegramNotifier(
+            settings.telegram_bot_token, settings.telegram_chat_id
+        )
+        self._error_notified = False
 
     # ────────────────────── 제어 ──────────────────────
     @property
@@ -120,9 +125,13 @@ class Trader:
             try:
                 self.step()
                 self.error = None
+                self._error_notified = False
             except Exception as e:  # 루프가 죽지 않도록 방어
                 self.error = str(e)
                 logger.exception("스텝 오류: %s", e)
+                if not self._error_notified:
+                    self.notifier.send(f"⚠️ Khali 오류: {e}")
+                    self._error_notified = True
             self._stop.wait(self.s.poll_interval_sec)
 
     def step(self) -> None:
@@ -200,6 +209,10 @@ class Trader:
                 reason=decision.reason,
             )
             logger.info("매수 %s @ %.2f (%s)", result.volume, result.price, decision.reason)
+            self.notifier.send(
+                f"🟢 매수 {self.s.market} {result.volume:.4f}개 @ {result.price:,.0f}원\n"
+                f"사유: {decision.reason} [{self.s.order_mode.value}]"
+            )
 
         elif decision.type == DecisionType.SELL:
             entry = self.portfolio.entry_price
@@ -219,6 +232,10 @@ class Trader:
             logger.info(
                 "매도 %s @ %.2f 손익=%.0f (%s)",
                 result.volume, result.price, realized, decision.reason,
+            )
+            self.notifier.send(
+                f"🔴 매도 {self.s.market} {result.volume:.4f}개 @ {result.price:,.0f}원 "
+                f"손익 {realized:+,.0f}원\n사유: {decision.reason} [{self.s.order_mode.value}]"
             )
 
     # ────────────────────── 상태 ──────────────────────

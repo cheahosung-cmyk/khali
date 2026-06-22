@@ -21,6 +21,7 @@ from ..analysis.scanner import score_market
 from ..config import OrderMode, Settings
 from ..exchange.base import ExchangeClient
 from ..exchange.factory import create_client
+from ..notify.telegram import TelegramNotifier
 from ..storage.repositories import TradeRepository
 from ..strategies.indicators import sma
 from .order_manager import OrderManager
@@ -49,6 +50,11 @@ class RotationTrader:
         # status() 가 네트워크 없이 읽도록 루프에서 갱신하는 캐시
         self.last_equity = settings.base_capital_krw
         self.last_price = 0.0
+        self.notifier = TelegramNotifier(
+            settings.telegram_bot_token, settings.telegram_chat_id
+        )
+        self.prev_regime: str | None = None
+        self._error_notified = False
 
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -119,9 +125,13 @@ class RotationTrader:
             try:
                 self.step()
                 self.error = None
+                self._error_notified = False
             except Exception as e:
                 self.error = str(e)
                 logger.exception("로테이션 스텝 오류: %s", e)
+                if not self._error_notified:   # 에러는 한 번만 알림 (스팸 방지)
+                    self.notifier.send(f"⚠️ Khali 로테이션 오류: {e}")
+                    self._error_notified = True
             self._stop.wait(self.s.poll_interval_sec)
 
     def _price(self, symbol: str) -> float:
@@ -206,12 +216,22 @@ class RotationTrader:
                 self.running = False
                 self._stop.set()
                 self.last_action = "kill"
+                self.notifier.send(
+                    f"⛔ Khali 킬스위치 발동! 고점대비 {dd:.1%} 하락 → 전량청산·정지. "
+                    f"평가자산 {equity:,.0f}원"
+                )
                 self._persist(equity)
                 return
 
         # 2) 레짐 체크 (매 스텝): 베어면 즉시 현금
         bull = self._btc_bull()
         self.regime = "bull" if bull else "bear"
+        if self.prev_regime and self.prev_regime != self.regime:
+            self.notifier.send(
+                f"📊 Khali BTC 레짐 전환: {self.prev_regime} → {self.regime}"
+                + (" (매수 우호적!)" if bull else " (현금 회피)")
+            )
+        self.prev_regime = self.regime
         if not bull:
             if self.held_symbol:
                 self._go_cash("BTC 레짐 약세 → 현금 회피")
@@ -257,6 +277,12 @@ class RotationTrader:
         self.last_action, self.last_reason = side, reason
         logger.info("%s %s vol=%.6f @ %.2f 손익=%.0f (%s)",
                     side, symbol, volume, price, realized, reason)
+        emoji = "🟢 매수" if side == "buy" else "🔴 매도"
+        pnl = f" 손익 {realized:+,.0f}원" if side == "sell" else ""
+        self.notifier.send(
+            f"{emoji} {symbol} {volume:.4f}개 @ {price:,.0f}원{pnl}\n사유: {reason} "
+            f"[{self.s.order_mode.value}]"
+        )
 
     def _persist(self, equity: float) -> None:
         self.last_equity = equity   # status() 캐시 갱신
