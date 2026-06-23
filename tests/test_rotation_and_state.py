@@ -37,6 +37,20 @@ def test_rotation_top_n_holds_multiple(settings):
     assert r.final_value > 0
 
 
+def test_rotation_per_coin_stop_protects_on_crash(settings):
+    rise = [100 + i for i in range(51)]                 # 100 -> 150
+    crash = [150 * (0.97 ** k) for k in range(1, 70)]   # 급락
+    a = _series(rise + crash)
+    btc = _series([100 + i for i in range(len(rise) + len(crash))])  # BTC 강세 유지
+    rb = RotationBacktester(settings)
+    base = dict(lookback=10, rebalance_days=30, regime_ma=5, use_regime=True, top_n=1)
+    r_off = rb.run({"A": a}, btc, stop_pct=0.0, **base)
+    r_on = rb.run({"A": a}, btc, stop_pct=0.2, **base)
+    # 손절 켜면 급락을 일찍 빠져나와 손실이 작다
+    assert r_on.final_value > r_off.final_value
+    assert "CASH" in r_on.holdings_log
+
+
 def test_rotation_regime_gate_goes_cash_in_bear(settings):
     n = 200
     coin = _series([100 - i * 0.2 for i in range(n)])

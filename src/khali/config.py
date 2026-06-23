@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     rotation_lookback: int = Field(default=120, alias="ROTATION_LOOKBACK")
     rotation_rebalance_days: int = Field(default=14, alias="ROTATION_REBALANCE_DAYS")
     rotation_regime_ma: int = Field(default=50, alias="ROTATION_REGIME_MA")
+    # 보유 코인 개별 손절(진입가 대비). 0=off. 구간검증상 레짐게이트와 중복이라 기본 off,
+    # 다른 바스켓/장세용 안전장치로 제공.
+    rotation_stop_pct: float = Field(default=0.0, alias="ROTATION_STOP_PCT")
 
     @property
     def basket_list(self) -> list[str]:

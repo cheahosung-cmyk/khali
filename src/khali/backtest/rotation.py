@@ -50,6 +50,7 @@ class RotationBacktester:
         regime_ma: int = 50,
         use_regime: bool = True,
         top_n: int = 1,
+        stop_pct: float = 0.0,
     ) -> RotationResult:
         symbols = list(candles_by_symbol)
         price_maps = {s: _date_map(c) for s, c in candles_by_symbol.items()}
@@ -66,6 +67,7 @@ class RotationBacktester:
 
         cash = self.s.base_capital_krw
         holdings_units: dict[str, float] = {}   # symbol -> units (동시 N개 보유)
+        entry_px: dict[str, float] = {}         # symbol -> 진입가 (개별 손절용)
         cost = (self.s.fee_rate + self.s.slippage_pct)
 
         equity: list[float] = []
@@ -98,6 +100,15 @@ class RotationBacktester:
         for k in range(start, len(dates)):
             d = dates[k]
 
+            # 개별코인 손절 (매일 검사): 진입가 대비 stop_pct 하락 시 현금화
+            if stop_pct > 0:
+                for s in list(holdings_units):
+                    px = price_maps[s][d]
+                    if entry_px.get(s) and px <= entry_px[s] * (1 - stop_pct):
+                        cash += holdings_units[s] * px * (1 - cost)
+                        del holdings_units[s]
+                        entry_px.pop(s, None)
+
             if (k - start) % rebalance_days == 0:
                 prev_d = dates[k - lookback]
                 bull = btc_bull(d) if use_regime else True
@@ -113,6 +124,7 @@ class RotationBacktester:
                     if s not in targets:
                         cash += holdings_units[s] * price_maps[s][d] * (1 - cost)
                         del holdings_units[s]
+                        entry_px.pop(s, None)
                         rebalances += 1
                 # 2) 과보유분 매도 (균등비중 초과)
                 for s in targets:
@@ -130,6 +142,7 @@ class RotationBacktester:
                         if spend > 0:
                             holdings_units[s] = holdings_units.get(s, 0.0) + spend * (1 - cost) / price_maps[s][d]
                             cash -= spend
+                            entry_px.setdefault(s, price_maps[s][d])   # 신규 진입가 기록
                             rebalances += 1
 
             if not holdings_units:

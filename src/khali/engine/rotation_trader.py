@@ -219,8 +219,19 @@ class RotationTrader:
         self._reconcile_live()
 
         # 1) 킬스위치: 평가자산이 고점 대비 큰 폭 하락하면 전량청산+정지
-        equity = self._equity()
+        equity = self._equity()   # self.last_price = 보유코인 현재가
         self.peak_equity = max(self.peak_equity, equity)
+
+        # 1b) 개별코인 손절 (활성화 시): 진입가 대비 stop_pct 하락하면 현금화
+        #     백테스터(RotationBacktester.stop_pct)와 동일 규칙 — 정합성 유지
+        if (self.s.rotation_stop_pct > 0 and self.held_symbol
+                and self.portfolio.entry_price > 0 and self.last_price > 0):
+            change = (self.last_price - self.portfolio.entry_price) / self.portfolio.entry_price
+            if change <= -abs(self.s.rotation_stop_pct):
+                self._go_cash(f"{self.held_symbol} 개별 손절 {change:.1%}")
+                self.last_update = datetime.now(timezone.utc)
+                self._persist(self._equity())
+                return
         if self.s.max_drawdown_stop_pct > 0 and self.peak_equity > 0:
             dd = (equity - self.peak_equity) / self.peak_equity
             if dd <= -abs(self.s.max_drawdown_stop_pct):
