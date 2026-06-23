@@ -69,8 +69,8 @@ class Settings(BaseSettings):
     rotation_basket: str = Field(
         default="BTC,ETH,XRP,SOL,ADA,DOGE,TRX,LINK", alias="ROTATION_BASKET"
     )
-    rotation_lookback: int = Field(default=90, alias="ROTATION_LOOKBACK")
-    rotation_rebalance_days: int = Field(default=30, alias="ROTATION_REBALANCE_DAYS")
+    rotation_lookback: int = Field(default=120, alias="ROTATION_LOOKBACK")
+    rotation_rebalance_days: int = Field(default=14, alias="ROTATION_REBALANCE_DAYS")
     rotation_regime_ma: int = Field(default=50, alias="ROTATION_REGIME_MA")
 
     @property

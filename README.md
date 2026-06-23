@@ -216,7 +216,7 @@ STOP_LOSS_PCT=0.02
 레짐이 약세면 현금 보유**하는 전략. 실데이터 백테스트로 검증됨.
 
 ```bash
-khali rotate                                   # 기본: lookback 90일, 월간 리밸런스
+khali rotate                                   # 기본: lookback 120일, 격주 리밸런스(구간검증 robust)
 khali rotate --top-n 3                          # 상위 3개 균등분산 (MDD 완화)
 khali rotate --lookback 60 --rebalance 14      # 더 민감하게
 khali rotate --no-regime                        # BTC 레짐 게이트 끄고 비교
