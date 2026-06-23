@@ -61,6 +61,10 @@ khali check
 # 6) 현재 시장 추세 진단 (지금이 매수 우위 장세인지)
 khali regime
 
+# (live 검증) 감시하 수동 단발 주문 — 실거래 주문 경로 1회 검증용
+khali buyonce --krw 6000 --yes      # 소액 1회 매수 (live 전용)
+khali sellonce --yes                # 보유 전량 매도 (live 전용)
+
 # 7) 멀티코인 상대강도 스캔 + BTC 레짐 (무엇을 거래할지)
 khali scan
 khali scan --markets BTC,ETH,XRP,SOL

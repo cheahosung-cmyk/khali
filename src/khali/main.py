@@ -261,9 +261,64 @@ def cmd_rotate(args) -> None:
     print(f"\n  최근 보유: {' → '.join(tail)}")
 
 
+def cmd_buyonce(args) -> None:
+    """감시하 수동 단발 매수 — 실거래 주문 경로 검증용 (Council 권고)."""
+    _one_shot(args, side="buy")
+
+
+def cmd_sellonce(args) -> None:
+    """감시하 수동 단발 매도 — 보유 코인 전량(또는 --volume) 청산."""
+    _one_shot(args, side="sell")
+
+
+def _one_shot(args, side: str) -> None:
+    from .config import OrderMode
+    from .exchange.factory import create_client
+
+    settings = get_settings()
+    market = args.market or settings.market
+    coin = market.split("-")[1]
+
+    if settings.order_mode != OrderMode.LIVE:
+        print(f"ℹ️ 현재 ORDER_MODE={settings.order_mode.value}. 이 명령은 실거래 경로 "
+              f"검증용이라 live 에서만 실제 주문이 나갑니다. (.env 에서 ORDER_MODE=live)")
+        return
+    if not settings.has_api_keys:
+        print("❌ API 키가 없습니다 (.env BITHUMB_ACCESS_KEY/SECRET_KEY).")
+        return
+
+    client = create_client(settings.api_version, settings.bithumb_access_key,
+                           settings.bithumb_secret_key)
+    price = client.get_ticker(market).trade_price
+
+    if side == "buy":
+        krw = float(args.krw or settings.min_order_krw)
+        # 안전장치: 최소주문 이상, 자본 한도 이하로 제한
+        krw = max(settings.min_order_krw, min(krw, settings.base_capital_krw))
+        print(f"[수동 매수] {market} @ {price:,.0f}원 으로 {krw:,.0f}원어치 (LIVE)")
+        if not args.yes:
+            print("  실행하려면 --yes 를 붙이세요. (안전 확인)")
+            return
+        res = client.execute_buy(market, krw, price)
+        print(f"  ✅ 체결: {res.volume:.6f} {coin} @ {res.price:,.2f}원 "
+              f"수수료 {res.fee:,.2f} (uuid {res.uuid})")
+    else:
+        bal = next((b for b in client.get_balances() if b.currency == coin), None)
+        vol = float(args.volume) if args.volume else (bal.balance if bal else 0.0)
+        if vol <= 0:
+            print(f"  보유 {coin} 수량이 없습니다.")
+            return
+        print(f"[수동 매도] {market} {vol:.6f} {coin} @ {price:,.0f}원 (LIVE)")
+        if not args.yes:
+            print("  실행하려면 --yes 를 붙이세요. (안전 확인)")
+            return
+        res = client.execute_sell(market, vol, price)
+        print(f"  ✅ 체결: {res.volume:.6f} {coin} @ {res.price:,.2f}원 "
+              f"회수 {res.paid_krw:,.0f}원 수수료 {res.fee:,.2f} (uuid {res.uuid})")
+    client.close()
+
+
 def cmd_run(args) -> None:
-    from .engine.factory import create_engine
-    from .storage.db import init_db
 
     settings = get_settings()
     init_db(settings.database_url)
@@ -330,6 +385,16 @@ def main() -> None:
     ro.add_argument("--top-n", type=int, default=1, help="동시 보유 코인 수(균등분산)")
     ro.add_argument("--count", type=int, default=1500, help="사용할 일봉 개수")
 
+    bo = sub.add_parser("buyonce", help="수동 단발 매수 (실거래 경로 검증, live 전용)")
+    bo.add_argument("--market", help="예: KRW-XRP (생략시 .env MARKET)")
+    bo.add_argument("--krw", type=float, help="매수 금액(원), 생략시 최소주문액")
+    bo.add_argument("--yes", action="store_true", help="실제 주문 실행 확인")
+
+    so = sub.add_parser("sellonce", help="수동 단발 매도 (보유 전량/--volume, live 전용)")
+    so.add_argument("--market", help="예: KRW-XRP (생략시 .env MARKET)")
+    so.add_argument("--volume", type=float, help="매도 수량(생략시 전량)")
+    so.add_argument("--yes", action="store_true", help="실제 주문 실행 확인")
+
     sub.add_parser("run", help="헤드리스 매매 루프")
 
     args = parser.parse_args()
@@ -343,6 +408,8 @@ def main() -> None:
         "regime": cmd_regime,
         "scan": cmd_scan,
         "rotate": cmd_rotate,
+        "buyonce": cmd_buyonce,
+        "sellonce": cmd_sellonce,
         "run": cmd_run,
     }[command](args)
 
