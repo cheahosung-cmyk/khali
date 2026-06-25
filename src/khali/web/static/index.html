@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khali · 빗썸 자동매매</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+         margin: 0; background: #0f1115; color: #e6e6e6; }
+  header { padding: 16px 24px; background: #171a21; display: flex;
+           align-items: center; gap: 16px; border-bottom: 1px solid #262b36; }
+  h1 { font-size: 18px; margin: 0; }
+  .mode { padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+  .mode.paper { background: #1d4ed8; }
+  .mode.backtest { background: #4b5563; }
+  .mode.live { background: #b91c1c; }
+  main { padding: 24px; max-width: 980px; margin: 0 auto; }
+  /* 반응형: 화면 폭에 맞춰 카드 자동 줄바꿈 (모바일 대응) */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 12px; }
+  .card { background: #171a21; border: 1px solid #262b36; border-radius: 10px;
+          padding: 16px; }
+  .card .label { font-size: 12px; color: #9aa4b2; }
+  .card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .pos { color: #22c55e; } .neg { color: #ef4444; }
+  .controls { margin: 20px 0; display: flex; gap: 10px; align-items: center;
+              flex-wrap: wrap; }
+  button { background: #2563eb; color: #fff; border: 0; padding: 10px 18px;
+           border-radius: 8px; font-size: 14px; cursor: pointer; }
+  button.stop { background: #dc2626; }
+  button:disabled { opacity: .5; cursor: default; }
+  .status-line { color: #9aa4b2; font-size: 13px; margin: 8px 0 20px; }
+  .table-wrap { overflow-x: auto; }            /* 좁은 화면 가로 스크롤 */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 520px; }
+  th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid #262b36;
+           white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  .buy { color: #22c55e; } .sell { color: #ef4444; }
+  .err { color: #f59e0b; font-size: 13px; }
+  /* 연결 상태 배너 */
+  #conn { display: none; margin: 0 0 16px; padding: 10px 14px; border-radius: 8px;
+          background: #7f1d1d; color: #fee2e2; font-size: 14px; }
+  #conn.warn { background: #78350f; color: #fef3c7; }
+  header { flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Khali · 빗썸 자동매매</h1>
+  <span id="mode" class="mode">-</span>
+  <span id="regime" class="mode" style="display:none"></span>
+  <span id="market" style="color:#9aa4b2;font-size:13px"></span>
+</header>
+<main>
+  <div id="conn"></div>
+  <div class="card" id="loginCard" style="margin-bottom:16px">
+    <div class="label" style="margin-bottom:8px">
+      빗썸 API 키 (메모리에만 저장 · 디스크 미기록 · 출금권한 없는 키 사용)
+    </div>
+    <div id="loginForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="ak" placeholder="Connect/Access Key" style="flex:1;min-width:220px;
+        padding:9px;border-radius:8px;border:1px solid #2b3240;background:#0f1115;color:#e6e6e6" />
+      <input id="sk" type="password" placeholder="Secret Key" style="flex:1;min-width:220px;
+        padding:9px;border-radius:8px;border:1px solid #2b3240;background:#0f1115;color:#e6e6e6" />
+      <button onclick="login()">🔑 로그인</button>
+    </div>
+    <div id="loginState" style="display:none;align-items:center;gap:12px">
+      <span class="pos">● 로그인됨 (키 입력 완료)</span>
+      <button class="stop" onclick="logout()">로그아웃</button>
+    </div>
+    <div id="loginErr" class="err" style="margin-top:8px"></div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="label">총 평가자산</div>
+      <div class="value" id="total">-</div></div>
+    <div class="card"><div class="label">누적 손익</div>
+      <div class="value" id="pnl">-</div></div>
+    <div class="card"><div class="label">현금(KRW)</div>
+      <div class="value" id="cash">-</div></div>
+    <div class="card"><div class="label">현재가</div>
+      <div class="value" id="price">-</div></div>
+  </div>
+
+  <div class="controls">
+    <button id="startBtn" onclick="ctl('start')">▶ 시작</button>
+    <button id="stopBtn" class="stop" onclick="ctl('stop')">■ 정지</button>
+    <button onclick="enterToken()" style="background:#374151">🔑 토큰</button>
+    <span id="run" class="status-line"></span>
+  </div>
+  <div class="status-line" id="action"></div>
+  <div class="err" id="err"></div>
+
+  <h3>자산 추이</h3>
+  <div class="card" style="padding:10px">
+    <canvas id="equityChart" height="160" style="width:100%;display:block"></canvas>
+  </div>
+
+  <h3>최근 거래</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>시각</th><th>구분</th><th>가격</th><th>수량</th>
+        <th>금액</th><th>손익</th><th>사유</th></tr></thead>
+      <tbody id="trades"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const won = n => (n ?? 0).toLocaleString('ko-KR') + '원';
+
+// ── 인증: 토큰을 모든 요청에 첨부. 401 시 1회만 프롬프트(무한 재프롬프트 금지) ──
+let AUTH_REQUIRED = false;
+let TOKEN_PROMPTED = false;   // 한 번 묻고 취소하면 더 안 물음 (보안·UX)
+function token() { return localStorage.getItem('khali_token') || ''; }
+async function api(path, opts = {}) {
+  opts.headers = Object.assign({}, opts.headers, AUTH_REQUIRED ? { 'X-Auth-Token': token() } : {});
+  const r = await fetch(path, opts);
+  if (r.status === 401 && !TOKEN_PROMPTED) {
+    TOKEN_PROMPTED = true;
+    const t = prompt('대시보드 접근 토큰을 입력하세요 (DASHBOARD_TOKEN):', '');
+    if (t) { localStorage.setItem('khali_token', t); TOKEN_PROMPTED = false; return api(path, opts); }
+    setConn('🔒 토큰이 필요합니다. 상단 "토큰 입력" 버튼으로 입력하세요.', 'warn');
+  }
+  return r;
+}
+function enterToken() {            // 수동 토큰 입력 (자동 반복 대신)
+  const t = prompt('대시보드 접근 토큰 (DASHBOARD_TOKEN):', token());
+  if (t !== null) { localStorage.setItem('khali_token', t); TOKEN_PROMPTED = false; refresh(); }
+}
+async function initAuth() {
+  try {
+    const cfg = await (await fetch('/api/config')).json();
+    AUTH_REQUIRED = !!cfg.auth_required;
+  } catch (e) {}
+}
+
+// ── 연결 상태 배너 (조용한 멈춤 방지: 거래봇은 거짓말하면 안 됨) ──
+let failCount = 0;
+function setConn(msg, cls) {
+  const el = document.getElementById('conn');
+  if (!msg) { el.style.display = 'none'; return; }
+  el.textContent = msg;
+  el.className = cls === 'warn' ? 'warn' : '';
+  el.style.display = 'block';
+}
+
+async function refresh() {
+  let s, trades, eq;
+  try {
+    // 3개 엔드포인트 병렬 호출 (순차 → 병렬, 갱신 지연·blind window 축소)
+    [s, trades, eq] = await Promise.all([
+      api('/api/status').then(r => r.json()),
+      api('/api/trades?limit=30').then(r => r.json()),
+      api('/api/equity').then(r => r.json()),
+    ]);
+    failCount = 0;
+  } catch (e) {
+    failCount++;
+    // 연속 2회 이상 실패해야 경보 (단발 네트워크 끊김 오탐 방지)
+    if (failCount >= 2)
+      setConn('⚠ 서버에 연결할 수 없습니다 (백엔드 중단?). 화면 데이터가 갱신되지 않습니다.');
+    return;
+  }
+  // staleness: 가동 중인데 마지막 갱신이 오래되면 엔진 루프 멈춤 의심 (stale=거짓말 방지)
+  if (s.running && s.last_update) {
+    const age = Date.now() - Date.parse(s.last_update);
+    if (age > 40000)
+      setConn('⚠ 데이터가 ' + Math.round(age / 1000) + '초째 갱신 안 됨 (엔진 멈춤 의심).', 'warn');
+    else setConn('');
+  } else setConn('');
+  try {
+    const m = document.getElementById('mode');
+    m.textContent = (s.mode || '').toUpperCase();
+    m.className = 'mode ' + (s.mode || '');
+    // 레짐 신호등 (로테이션 엔진에서만 제공)
+    const rg = document.getElementById('regime');
+    if (s.regime && s.regime !== '?') {
+      const map = {bull:['🟢 상승','#15803d'], bear:['🔴 하락','#b91c1c'], mixed:['🟡 혼조','#a16207']};
+      const [txt, col] = map[s.regime] || ['?', '#4b5563'];
+      rg.textContent = 'BTC ' + txt; rg.style.background = col; rg.style.display = '';
+    } else { rg.style.display = 'none'; }
+    document.getElementById('market').textContent = s.market + ' · ' + s.strategy
+      + (s.killed ? ' · ⛔킬스위치' : '');
+    document.getElementById('total').textContent = won(s.total_value);
+    const pnl = document.getElementById('pnl');
+    pnl.textContent = (s.pnl_total >= 0 ? '+' : '') + won(s.pnl_total)
+       + ' (' + (s.pnl_pct >= 0 ? '+' : '') + s.pnl_pct + '%)';
+    pnl.className = 'value ' + (s.pnl_total >= 0 ? 'pos' : 'neg');
+    document.getElementById('cash').textContent = won(s.cash_krw);
+    document.getElementById('price').textContent = won(s.last_price);
+    document.getElementById('run').textContent =
+      s.running ? '● 가동 중' : '○ 정지됨';
+    document.getElementById('action').textContent =
+      '최근 판단: ' + (s.last_action || '-') + ' — ' + (s.last_reason || '');
+    document.getElementById('err').textContent = s.error ? ('⚠ ' + s.error) : '';
+    // 로그인 상태 토글 (live 모드는 키 필요)
+    document.getElementById('loginForm').style.display = s.has_keys ? 'none' : 'flex';
+    document.getElementById('loginState').style.display = s.has_keys ? 'flex' : 'none';
+    const needKey = (s.mode === 'live') && !s.has_keys;
+    document.getElementById('startBtn').disabled = s.running || needKey;
+    document.getElementById('stopBtn').disabled = !s.running;
+    document.getElementById('startBtn').title = needKey
+      ? 'live 모드는 먼저 API 키 로그인이 필요합니다' : '';
+
+    document.getElementById('trades').innerHTML = (trades || []).map(t => `
+      <tr>
+        <td>${new Date(t.ts).toLocaleString('ko-KR')}</td>
+        <td class="${t.side}">${t.side === 'buy' ? '매수' : '매도'}</td>
+        <td>${won(Math.round(t.price))}</td>
+        <td>${(t.volume ?? 0).toFixed(4)}</td>
+        <td>${won(Math.round(t.krw))}</td>
+        <td class="${t.realized_pnl >= 0 ? 'buy' : 'sell'}">
+          ${t.side === 'sell' ? won(Math.round(t.realized_pnl)) : '-'}</td>
+        <td style="text-align:left;color:#9aa4b2">${t.reason || ''}</td>
+      </tr>`).join('');
+
+    drawEquity(eq);
+  } catch (e) { console.error(e); }
+}
+
+function drawEquity(points) {
+  const cv = document.getElementById('equityChart');
+  const ctx = cv.getContext('2d');
+  const w = cv.width = cv.clientWidth, h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  if (!points || points.length < 2) {
+    ctx.fillStyle = '#9aa4b2'; ctx.font = '13px sans-serif';
+    ctx.fillText('데이터 누적 중...', 12, h / 2); return;
+  }
+  const vals = points.map(p => p.total);
+  const min = Math.min(...vals), max = Math.max(...vals), pad = 8;
+  const range = (max - min) || 1;
+  const x = i => pad + i * (w - 2 * pad) / (points.length - 1);
+  const y = v => h - pad - (v - min) / range * (h - 2 * pad);
+  const up = vals[vals.length - 1] >= vals[0];
+  const col = up ? '#22c55e' : '#ef4444';
+  // 면적
+  ctx.beginPath(); ctx.moveTo(x(0), y(vals[0]));
+  vals.forEach((v, i) => ctx.lineTo(x(i), y(v)));
+  ctx.lineTo(x(vals.length - 1), h - pad); ctx.lineTo(x(0), h - pad); ctx.closePath();
+  ctx.fillStyle = up ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)'; ctx.fill();
+  // 선
+  ctx.beginPath(); ctx.moveTo(x(0), y(vals[0]));
+  vals.forEach((v, i) => ctx.lineTo(x(i), y(v)));
+  ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+  // 최저/최고 라벨
+  ctx.fillStyle = '#9aa4b2'; ctx.font = '11px sans-serif';
+  ctx.fillText(Math.round(max).toLocaleString('ko-KR'), 6, 12);
+  ctx.fillText(Math.round(min).toLocaleString('ko-KR'), 6, h - 4);
+}
+async function ctl(action) {
+  try {
+    const r = await (await api('/api/' + action, { method: 'POST' })).json();
+    if (r && r.ok === false)
+      setConn('⚠ ' + action + ' 실패: ' + (r.error || '알 수 없음'), 'warn');
+  } catch (e) {
+    setConn('⚠ 명령 전송 실패 — 서버 연결을 확인하세요.');
+  }
+  refresh();
+}
+async function login() {
+  const ak = document.getElementById('ak').value.trim();
+  const sk = document.getElementById('sk').value.trim();
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+  if (!ak || !sk) { errEl.textContent = 'Key 를 모두 입력하세요.'; return; }
+  const r = await (await api('/api/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ access_key: ak, secret_key: sk })
+  })).json();
+  if (!r.ok) { errEl.textContent = '⚠ ' + r.error; }
+  else { document.getElementById('ak').value = ''; document.getElementById('sk').value = ''; }
+  refresh();
+}
+async function logout() {
+  await api('/api/logout', { method: 'POST' });
+  refresh();
+}
+(async () => { await initAuth(); refresh(); setInterval(refresh, 5000); })();
+</script>
+</body>
+</html>
