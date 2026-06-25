@@ -328,14 +328,16 @@ def cmd_report(args) -> None:
     init_db(settings.database_url)
     p = TradeRepository.performance_summary(settings.order_mode.value)
     base = settings.base_capital_krw
-    ret_pct = ((p["last_value"] / base - 1) * 100) if (base and p["last_value"]) else 0.0
+    # 스냅샷이 아직 없으면(가동 1분 미만 등) 시작자본으로 표시 (0원 오표시 방지)
+    last_value = p["last_value"] or base
+    ret_pct = ((last_value / base - 1) * 100) if base else 0.0
 
     print(f"\n=== Khali Forward 성과 ({settings.order_mode.value}) ===")
     print(f"  가동 {p['days']}일 | 청산거래 {p['closed_trades']}회 | "
           f"시장노출 {p['time_in_market_pct']:.0f}% (나머지는 현금)")
     print(f"  순실현손익(수수료포함) {p['net_realized_pnl']:+,.0f}원 | "
           f"누적수수료 {p['total_fees']:,.0f}원")
-    print(f"  평가자산 {p['last_value']:,.0f}원 (시작 {base:,.0f} 대비 {ret_pct:+.2f}%) | "
+    print(f"  평가자산 {last_value:,.0f}원 (시작 {base:,.0f} 대비 {ret_pct:+.2f}%) | "
           f"MDD {p['max_drawdown_pct']:.1f}%")
 
     # 표본 게이트: 사전등록 거래수 미만이면 성과 판단 거부
