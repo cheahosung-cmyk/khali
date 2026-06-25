@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     # 다른 바스켓/장세용 안전장치로 제공.
     rotation_stop_pct: float = Field(default=0.0, alias="ROTATION_STOP_PCT")
 
+    # ── 자본 투입 사전등록 결정규칙 (forward 리포트가 PASS/FAIL 판정) ──
+    # 확증편향 방지: 자본 키우기 전 '미리' 정한 기준. khali report 가 이걸로 판정.
+    decision_min_trades: int = Field(default=30, alias="DECISION_MIN_TRADES")
+    decision_min_return_pct: float = Field(default=0.0, alias="DECISION_MIN_RETURN_PCT")
+    decision_max_dd_pct: float = Field(default=25.0, alias="DECISION_MAX_DD_PCT")
+
     @property
     def basket_list(self) -> list[str]:
         return [s.strip().upper() for s in self.rotation_basket.split(",") if s.strip()]

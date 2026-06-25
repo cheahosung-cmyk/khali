@@ -318,6 +318,53 @@ def _one_shot(args, side: str) -> None:
     client.close()
 
 
+def cmd_report(args) -> None:
+    """forward 성과 리포트 — '엣지 있나'를 정직하게 판정(반증 도구)."""
+    from .config import get_settings
+    from .storage.db import init_db
+    from .storage.repositories import TradeRepository
+
+    settings = get_settings()
+    init_db(settings.database_url)
+    p = TradeRepository.performance_summary(settings.order_mode.value)
+    base = settings.base_capital_krw
+    ret_pct = ((p["last_value"] / base - 1) * 100) if (base and p["last_value"]) else 0.0
+
+    print(f"\n=== Khali Forward 성과 ({settings.order_mode.value}) ===")
+    print(f"  가동 {p['days']}일 | 청산거래 {p['closed_trades']}회 | "
+          f"시장노출 {p['time_in_market_pct']:.0f}% (나머지는 현금)")
+    print(f"  순실현손익(수수료포함) {p['net_realized_pnl']:+,.0f}원 | "
+          f"누적수수료 {p['total_fees']:,.0f}원")
+    print(f"  평가자산 {p['last_value']:,.0f}원 (시작 {base:,.0f} 대비 {ret_pct:+.2f}%) | "
+          f"MDD {p['max_drawdown_pct']:.1f}%")
+
+    # 표본 게이트: 사전등록 거래수 미만이면 성과 판단 거부
+    need = settings.decision_min_trades
+    if p["closed_trades"] < need:
+        print(f"\n  ⚠️ 표본 부족: {p['closed_trades']}/{need} 청산거래 — "
+              f"승률·엣지 판단 불가(노이즈). 더 모으세요.")
+    else:
+        print(f"  승률 {p['win_rate_pct']:.1f}% (청산 {p['closed_trades']}회)")
+
+    # 사전등록 결정규칙 PASS/FAIL (확증편향 방지)
+    checks = [
+        (p["closed_trades"] >= need, f"청산거래 ≥ {need} ({p['closed_trades']})"),
+        (ret_pct >= settings.decision_min_return_pct,
+         f"순수익률 ≥ {settings.decision_min_return_pct}% ({ret_pct:+.2f}%)"),
+        (p["max_drawdown_pct"] <= settings.decision_max_dd_pct,
+         f"MDD ≤ {settings.decision_max_dd_pct}% ({p['max_drawdown_pct']:.1f}%)"),
+    ]
+    print("\n  [자본 투입 사전등록 기준]")
+    for ok, label in checks:
+        print(f"   {'✅' if ok else '❌'} {label}")
+    verdict = all(c[0] for c in checks)
+    print(f"\n  판정: {'🟢 기준 충족 — 자본 확대 검토 가능' if verdict else '🔴 미충족 — 자본 확대 보류'}")
+    print("\n  ⚠️ 주의: time-in-market 가 낮은데 수익이 나면 '베타 회피'(현금으로 하락 피함)이지")
+    print("     알파(실력)가 아닐 수 있음. 진짜 엣지는 '한 번의 완전한 하락장을 거래로 통과'해야 증명됨.")
+    if settings.order_mode.value == "live":
+        print("  ⚠️ 라이브: 위 손익은 기록값 — 슬리피지/세금 누락 가능. `khali check`로 실잔고 대조.")
+
+
 def cmd_run(args) -> None:
     from .engine.factory import create_engine
     from .storage.db import init_db
@@ -397,6 +444,7 @@ def main() -> None:
     so.add_argument("--volume", type=float, help="매도 수량(생략시 전량)")
     so.add_argument("--yes", action="store_true", help="실제 주문 실행 확인")
 
+    sub.add_parser("report", help="forward 성과 리포트 (엣지 판정·반증 도구)")
     sub.add_parser("run", help="헤드리스 매매 루프")
 
     args = parser.parse_args()
@@ -412,6 +460,7 @@ def main() -> None:
         "rotate": cmd_rotate,
         "buyonce": cmd_buyonce,
         "sellonce": cmd_sellonce,
+        "report": cmd_report,
         "run": cmd_run,
     }[command](args)
 

@@ -148,6 +148,55 @@ class TradeRepository:
             }
 
     @staticmethod
+    def performance_summary(mode: str) -> dict:
+        """forward 성과 집계 (반증 도구). 소표본 과신 방지를 위해 원시 사실만 반환."""
+        with get_session() as s:
+            trades = s.scalars(
+                select(TradeRecord).where(TradeRecord.mode == mode)
+                .order_by(TradeRecord.ts)
+            ).all()
+            snaps = s.scalars(
+                select(EquitySnapshot).where(EquitySnapshot.mode == mode)
+                .order_by(EquitySnapshot.ts)
+            ).all()
+
+        sells = [t for t in trades if t.side == "sell"]
+        closed = len(sells)
+        wins = sum(1 for t in sells if t.realized_pnl > 0)
+        net_realized = sum(t.realized_pnl for t in sells)
+        total_fees = sum(t.fee for t in trades)
+
+        # 자산곡선 기반: 기간·MDD·time-in-market
+        days = 0
+        mdd = 0.0
+        in_market_pct = 0.0
+        first_val = last_val = 0.0
+        if snaps:
+            first_val = snaps[0].total_value
+            last_val = snaps[-1].total_value
+            days = max(0, (snaps[-1].ts - snaps[0].ts).days)
+            peak = snaps[0].total_value
+            for sn in snaps:
+                peak = max(peak, sn.total_value)
+                if peak > 0:
+                    mdd = min(mdd, (sn.total_value - peak) / peak * 100)
+            in_market_pct = (
+                sum(1 for sn in snaps if sn.position_value > 1e-9) / len(snaps) * 100
+            )
+        return {
+            "closed_trades": closed,
+            "win_rate_pct": (wins / closed * 100) if closed else 0.0,
+            "net_realized_pnl": net_realized,
+            "total_fees": total_fees,
+            "days": days,
+            "first_value": first_val,
+            "last_value": last_val,
+            "max_drawdown_pct": abs(mdd),
+            "time_in_market_pct": in_market_pct,
+            "n_snapshots": len(snaps),
+        }
+
+    @staticmethod
     def equity_curve(limit: int = 500) -> list[dict]:
         with get_session() as s:
             rows = s.scalars(
