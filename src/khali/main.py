@@ -319,6 +319,8 @@ def _one_shot(args, side: str) -> None:
 
 
 def cmd_run(args) -> None:
+    from .engine.factory import create_engine
+    from .storage.db import init_db
 
     settings = get_settings()
     init_db(settings.database_url)
