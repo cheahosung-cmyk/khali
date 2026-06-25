@@ -49,15 +49,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Khali 빗썸 자동매매", lifespan=lifespan)
     app.state.trader = trader
 
-    if settings.host == "0.0.0.0" and not settings.dashboard_token:
-        logger.warning(
-            "⚠️ 대시보드가 0.0.0.0(외부)에 노출되는데 DASHBOARD_TOKEN 이 없습니다! "
-            "누구나 키 입력·봇 조작 가능. .env 에 DASHBOARD_TOKEN 을 설정하세요."
+    _LOCALHOSTS = {"127.0.0.1", "localhost", "::1"}
+
+    # secure-by-default: 비localhost 바인딩인데 토큰이 없으면 기동 거부 (경고→하드에러)
+    if settings.host not in _LOCALHOSTS and not settings.dashboard_token:
+        raise RuntimeError(
+            f"HOST={settings.host}(외부 노출)인데 DASHBOARD_TOKEN 이 없습니다. "
+            "외부 접근 시 누구나 봇 조작·키 입력이 가능해 위험합니다.\n"
+            "→ .env 에 DASHBOARD_TOKEN 을 설정하세요. "
+            "또한 평문 HTTP 라 토큰·키가 도청될 수 있으니 원격 접근은 "
+            "TLS 또는 SSH 터널을 통해서만 하세요."
         )
+
+    # Host 헤더 allowlist (DNS 리바인딩 / localhost-CSRF 방어)
+    allowed_hosts = _LOCALHOSTS | {settings.host}
 
     @app.middleware("http")
     async def _auth(request: Request, call_next):
-        # 토큰이 설정된 경우에만 /api/* 보호 (대시보드 페이지는 열려서 토큰 입력 가능)
+        # 1) Host 헤더 검증: 악성 페이지가 DNS 리바인딩으로 127.0.0.1 을
+        #    공격하는 것을 차단 (localhost 도 보안경계가 아니므로 필수)
+        host = (request.headers.get("host") or "").split(":")[0]
+        if host and host not in allowed_hosts:
+            return JSONResponse({"detail": "host not allowed"}, status_code=403)
+
+        # 2) 토큰이 설정된 경우 /api/* 보호 (대시보드 페이지는 열려서 토큰 입력 가능)
         path = request.url.path
         if (
             settings.dashboard_token
