@@ -62,12 +62,14 @@ class VolatilityBreakout(Strategy):
             trend_ok = ma is None or prev.close >= ma
             if bar.high >= target and trend_ok:
                 atr = self.atr
-                stop = target - atr if atr else None
+                # 갭상승으로 시가가 목표가 위면 시가 체결 (전략이 갭 모델링)
+                fill = bar.open if bar.open > target else target
+                stop = fill - atr if atr else None
                 signals.append(
                     Signal(
                         symbol=bar.symbol,
                         side=Side.BUY,
-                        price=target,
+                        price=fill,
                         stop_price=stop,
                         reason=f"돌파 target={target:.1f} k={self.k} "
                         f"ma={ma:.1f}" if ma else f"돌파 target={target:.1f}",

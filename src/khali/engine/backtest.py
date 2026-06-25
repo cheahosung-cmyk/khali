@@ -91,12 +91,9 @@ def run_backtest(
             if qty <= 0:
                 continue
 
-            # 체결가 분리(전문가 수정): 진입은 목표가(갭상승 시 시가),
-            # 청산은 종가. 엔진이 체결 직전 mark를 주입하고 평가용으로 복원.
-            if signal.side == Side.BUY:
-                fill_ref = bar.open if bar.open > signal.price else signal.price
-            else:
-                fill_ref = bar.close
+            # 체결가는 전략이 정한 signal.price를 당일 [저,고] 범위로 클램프
+            # 만 한다(전문가 수정: 갭 모델링 책임은 데이터를 가진 전략으로 이관).
+            fill_ref = max(bar.low, min(signal.price, bar.high))
             broker.set_mark(bar.symbol, fill_ref)
 
             entry_price = (
