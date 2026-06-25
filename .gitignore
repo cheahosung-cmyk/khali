@@ -1,0 +1,24 @@
+# 자격증명 — 절대 커밋 금지
+.env
+config/.env
+*.key
+*.secret
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+venv/
+.venv/
+
+# 데이터/로그
+*.log
+data/*.csv
+!tests/**/*.csv
