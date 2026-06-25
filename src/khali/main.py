@@ -16,7 +16,9 @@ from khali.strategy.volatility_breakout import VolatilityBreakout
 
 
 def _backtest(args: argparse.Namespace) -> None:
-    if args.csv:
+    if args.naver:
+        bars = feed.from_naver(args.symbol, args.start, args.end)
+    elif args.csv:
         bars = list(feed.from_csv(args.csv, args.symbol))
     else:
         bars = list(feed.synthetic(args.symbol, days=args.days))
@@ -34,6 +36,9 @@ def main() -> None:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     bt = sub.add_parser("backtest", help="전략 백테스트")
+    bt.add_argument("--naver", action="store_true", help="네이버 금융 실데이터 사용")
+    bt.add_argument("--start", default="20240101", help="실데이터 시작 YYYYMMDD")
+    bt.add_argument("--end", default="20260625", help="실데이터 종료 YYYYMMDD")
     bt.add_argument("--csv", help="OHLCV CSV 경로 (없으면 합성 데이터)")
     bt.add_argument("--symbol", default="005930", help="종목코드 (기본 삼성전자)")
     bt.add_argument("--days", type=int, default=250)

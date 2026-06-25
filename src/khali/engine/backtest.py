@@ -90,11 +90,20 @@ def run_backtest(
             qty = risk.size_order(signal, account, bar.close)
             if qty <= 0:
                 continue
+
+            # 체결가 분리(전문가 수정): 진입은 목표가(갭상승 시 시가),
+            # 청산은 종가. 엔진이 체결 직전 mark를 주입하고 평가용으로 복원.
+            if signal.side == Side.BUY:
+                fill_ref = bar.open if bar.open > signal.price else signal.price
+            else:
+                fill_ref = bar.close
+            broker.set_mark(bar.symbol, fill_ref)
+
             entry_price = (
                 account.positions[signal.symbol].avg_price
                 if signal.side == Side.SELL
                 and signal.symbol in account.positions
-                else bar.close
+                else fill_ref
             )
             order = Order(
                 symbol=signal.symbol,
@@ -105,6 +114,7 @@ def run_backtest(
                 ts=bar.ts,
             )
             filled = broker.submit(order)
+            broker.set_mark(bar.symbol, bar.close)  # 평가용 복원
             if filled.status == OrderStatus.FILLED and signal.side == Side.SELL:
                 result.trades += 1
                 if filled.filled_price > entry_price:

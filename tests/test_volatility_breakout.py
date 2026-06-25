@@ -36,12 +36,24 @@ def test_no_breakout_when_high_below_target():
 
 
 def test_trend_filter_blocks_below_ma():
+    # 룩어헤드 제거 후: 필터는 '전일 종가'가 '전일까지 MA' 위인지로 판단.
     strat = VolatilityBreakout(k=0.5, ma_window=2, atr_window=1)
     strat.on_bar(_bar("A", 0, 200, 210, 190, 200), Position("A"))
-    strat.on_bar(_bar("A", 1, 200, 210, 190, 200), Position("A"))
-    # MA=200. 당일 종가 150 < MA → 돌파해도 진입 차단
-    signals = strat.on_bar(_bar("A", 2, 200, 230, 140, 150), Position("A"))
+    # 전일(day1) 종가 180. day2 시점 MA=(200+180)/2=190 > 180 → 약세 → 차단
+    strat.on_bar(_bar("A", 1, 180, 185, 175, 180), Position("A"))
+    # day2: 목표 180+range(10)*0.5=185, 고가 230으로 돌파하지만 추세필터가 막음
+    signals = strat.on_bar(_bar("A", 2, 180, 230, 140, 200), Position("A"))
     assert [s for s in signals if s.side == Side.BUY] == []
+
+
+def test_trend_filter_allows_above_ma():
+    # 전일 종가가 MA 위면 돌파 진입 허용.
+    strat = VolatilityBreakout(k=0.5, ma_window=2, atr_window=1)
+    strat.on_bar(_bar("A", 0, 100, 110, 90, 100), Position("A"))
+    # 전일(day1) 종가 120. day2 MA=(100+120)/2=110 < 120 → 강세
+    strat.on_bar(_bar("A", 1, 110, 125, 105, 120), Position("A"))
+    signals = strat.on_bar(_bar("A", 2, 120, 200, 115, 150), Position("A"))
+    assert any(s.side == Side.BUY for s in signals)
 
 
 def test_open_position_triggers_close():

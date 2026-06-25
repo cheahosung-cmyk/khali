@@ -18,7 +18,8 @@ htmlcov/
 venv/
 .venv/
 
-# 데이터/로그
+# 데이터/로그/캐시
 *.log
 data/*.csv
 !tests/**/*.csv
+.cache/
