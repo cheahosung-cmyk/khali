@@ -36,7 +36,30 @@ def init_db(database_url: str):
     from . import models  # noqa: F401
 
     Base.metadata.create_all(_engine)
+    _migrate_sqlite(_engine)
     return _engine
+
+
+def _migrate_sqlite(engine):
+    """기존 SQLite DB에 누락된 컬럼을 안전하게 추가 (create_all 은 ALTER 안 함)."""
+    if engine.dialect.name != "sqlite":
+        return
+    from sqlalchemy import text
+
+    expected = {
+        "bot_state": {
+            "peak_equity": "FLOAT DEFAULT 0.0",
+            "last_rebalance": "DATETIME",
+        }
+    }
+    with engine.begin() as conn:
+        for table, cols in expected.items():
+            existing = {
+                row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))
+            }
+            for col, decl in cols.items():
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {decl}"))
 
 
 @contextmanager

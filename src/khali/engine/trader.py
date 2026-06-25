@@ -57,6 +57,8 @@ class Trader:
             settings.telegram_bot_token, settings.telegram_chat_id
         )
         self._error_notified = False
+        self._step_count = 0
+        self._snapshot_every = max(1, 60 // max(1, settings.poll_interval_sec))
 
     # ────────────────────── 제어 ──────────────────────
     @property
@@ -181,13 +183,15 @@ class Trader:
         self.last_reason = decision.reason
         self.last_update = datetime.now(timezone.utc)
 
-        # 자산 스냅샷 기록 + 포지션 상태 영속화 (재시작 복구용)
-        TradeRepository.add_equity(
-            cash_krw=self.portfolio.cash_krw,
-            position_value=self.portfolio.position_value(price),
-            total_value=self.portfolio.total_value(price),
-            mode=self.s.order_mode.value,
-        )
+        # 자산 스냅샷 기록(~1분당 1회 스로틀, DB 무한증가 방지) + 상태 영속화
+        self._step_count += 1
+        if self._step_count % self._snapshot_every == 0:
+            TradeRepository.add_equity(
+                cash_krw=self.portfolio.cash_krw,
+                position_value=self.portfolio.position_value(price),
+                total_value=self.portfolio.total_value(price),
+                mode=self.s.order_mode.value,
+            )
         if self.s.order_mode != OrderMode.BACKTEST:
             TradeRepository.save_state(
                 market=self.s.market, mode=self.s.order_mode.value,

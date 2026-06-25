@@ -54,6 +54,9 @@ class RotationTrader:
         )
         self.prev_regime: str | None = None
         self._error_notified = False
+        # 자산 스냅샷 기록 스로틀: 매 폴링(10s)마다 쓰면 DB 무한증가 → ~1분당 1회
+        self._step_count = 0
+        self._snapshot_every = max(1, 60 // max(1, settings.poll_interval_sec))
 
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -92,7 +95,18 @@ class RotationTrader:
         self.portfolio.realized_pnl_total = st["realized_pnl_total"]
         self.portfolio.consecutive_losses = st["consecutive_losses"]
         self.held_symbol = st["market"] if st["market"] not in ("CASH", "") else None
-        logger.info("로테이션 상태 복구: 보유=%s 현금=%.0f", self.held_symbol, self.portfolio.cash_krw)
+        # 킬스위치 고점·마지막 리밸런스 복구 (재시작 시 무장해제/churn 방지)
+        self.last_rebalance = st.get("last_rebalance")
+        restored_peak = st.get("peak_equity") or 0.0
+        # 입금/성장 흡수: peak 는 현재 평가자산 이상으로만 (출금 거짓청산 일부 완화).
+        # 콜드스타트(0)면 현재 평가자산으로 시드.
+        try:
+            cur = self._equity()
+        except Exception:
+            cur = self.portfolio.cash_krw
+        self.peak_equity = max(restored_peak, cur) if restored_peak > 0 else cur
+        logger.info("로테이션 상태 복구: 보유=%s 현금=%.0f peak=%.0f",
+                    self.held_symbol, self.portfolio.cash_krw, self.peak_equity)
         return True
 
     def start(self) -> None:
@@ -286,7 +300,8 @@ class RotationTrader:
             self.last_action, self.last_reason = "hold", f"보유 유지 {self.held_symbol}"
 
         self.last_update = now
-        self._persist(self._equity())
+        # #2: 리밸런스(거래 가능)면 재계산, 아니면 상단에서 구한 equity 재사용(중복 티커호출 제거)
+        self._persist(self._equity() if due else equity)
 
     # ────────────────────── 기록/상태 ──────────────────────
     def _record(
@@ -310,16 +325,20 @@ class RotationTrader:
 
     def _persist(self, equity: float) -> None:
         self.last_equity = equity   # status() 캐시 갱신
-        TradeRepository.add_equity(
-            cash_krw=self.portfolio.cash_krw,
-            position_value=equity - self.portfolio.cash_krw,
-            total_value=equity, mode=self.s.order_mode.value,
-        )
+        self._step_count += 1
+        # #1: 자산 스냅샷은 ~1분당 1회만 기록 (10초마다 쓰면 DB 무한증가)
+        if self._step_count % self._snapshot_every == 0:
+            TradeRepository.add_equity(
+                cash_krw=self.portfolio.cash_krw,
+                position_value=equity - self.portfolio.cash_krw,
+                total_value=equity, mode=self.s.order_mode.value,
+            )
         if self.s.order_mode != OrderMode.BACKTEST:
-            # held_symbol 을 market 필드에 저장 (보유 코인 추적)
+            # 포지션 + 킬스위치 고점 + 마지막 리밸런스 영속 (재시작 복구)
             TradeRepository.save_state(
                 market=self.held_symbol or "CASH",
                 mode=self.s.order_mode.value, portfolio=self.portfolio,
+                peak_equity=self.peak_equity, last_rebalance=self.last_rebalance,
             )
 
     def status(self) -> dict:

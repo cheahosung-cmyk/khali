@@ -44,6 +44,9 @@ class BotState(Base):
     high_price: Mapped[float] = mapped_column(Float)
     realized_pnl_total: Mapped[float] = mapped_column(Float, default=0.0)
     consecutive_losses: Mapped[int] = mapped_column(Integer, default=0)
+    # 로테이션 엔진 복구용: 킬스위치 고점·마지막 리밸런스 시각 (재시작 시 무장해제/churn 방지)
+    peak_equity: Mapped[float] = mapped_column(Float, default=0.0)
+    last_rebalance: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 

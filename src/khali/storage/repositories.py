@@ -91,7 +91,9 @@ class TradeRepository:
             return sum(r.realized_pnl for r in rows)
 
     @staticmethod
-    def save_state(*, market: str, mode: str, portfolio) -> None:
+    def save_state(*, market: str, mode: str, portfolio,
+                   peak_equity: float | None = None,
+                   last_rebalance=None) -> None:
         with get_session() as s:
             st = s.get(BotState, 1)
             if st is None:
@@ -105,6 +107,10 @@ class TradeRepository:
             st.high_price = portfolio.high_price
             st.realized_pnl_total = portfolio.realized_pnl_total
             st.consecutive_losses = portfolio.consecutive_losses
+            if peak_equity is not None:
+                st.peak_equity = peak_equity
+            if last_rebalance is not None:
+                st.last_rebalance = last_rebalance
 
     @staticmethod
     def load_state(market: str, mode: str) -> dict | None:
@@ -137,6 +143,8 @@ class TradeRepository:
                 "high_price": st.high_price,
                 "realized_pnl_total": st.realized_pnl_total,
                 "consecutive_losses": st.consecutive_losses,
+                "peak_equity": st.peak_equity or 0.0,
+                "last_rebalance": st.last_rebalance,
             }
 
     @staticmethod
