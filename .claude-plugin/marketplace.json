@@ -36,6 +36,21 @@
       "license": "MIT",
       "keywords": ["workflow", "tdd", "planning", "debugging", "code-review", "khali"],
       "category": "workflow"
+    },
+    {
+      "name": "khali-trading",
+      "source": "./plugins/khali-trading",
+      "description": "Safety skills for building exchange/trading bots: resilient API boundaries, live-money review, and backtest iteration.",
+      "version": "0.1.0",
+      "author": {
+        "name": "cheahosung-cmyk",
+        "email": "cheahosung@gmail.com"
+      },
+      "homepage": "https://github.com/cheahosung-cmyk/khali",
+      "repository": "https://github.com/cheahosung-cmyk/khali",
+      "license": "MIT",
+      "keywords": ["trading", "exchange", "api", "resilience", "backtest", "khali"],
+      "category": "trading"
     }
   ]
 }
