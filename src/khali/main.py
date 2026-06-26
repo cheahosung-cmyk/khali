@@ -56,6 +56,8 @@ def _paper(args: argparse.Namespace) -> None:
     split = {s: b[:-args.ticks] for s, b in data.items()}
     live = {s: b[-args.ticks:] for s, b in data.items()}
 
+    from khali.monitoring.event_logger import EventLogger
+
     broker = PaperBroker(args.cash)
     risk = RiskManager(RiskConfig(), args.cash)
     session = LiveSession(
@@ -63,7 +65,7 @@ def _paper(args: argparse.Namespace) -> None:
         lambda: TrendBreakout(k=args.k, ma_window=20, atr_window=14, trail_mult=2.5),
         risk, list(data.keys()),
         lookback=120, top_n=3, rebalance_days=20,
-        on_event=lambda e: print("  ·", e),
+        on_event=EventLogger(args.log),
     )
     session.warmup(split)
 
@@ -94,11 +96,14 @@ def _live(args: argparse.Namespace) -> None:
         print("config/.env.example를 복사해 .env에 KIS 키를 채우세요.")
         return
 
+    from khali.monitoring.event_logger import EventLogger
+
     mode = "모의투자" if config.is_paper else "⚠️ 실전투자"
     action = "주문 실행" if args.execute else "dry-run(주문 미제출)"
     print(f"=== KIS 라이브 [{mode}] — {action} ===")
     try:
-        run_once(config, execute=args.execute, allow_live=args.allow_live)
+        run_once(config, execute=args.execute, allow_live=args.allow_live,
+                 on_event=EventLogger(args.log))
     except RuntimeError as e:
         print(f"⛔ {e}")
 
@@ -125,6 +130,7 @@ def main() -> None:
     pp.add_argument("--ticks", type=int, default=20, help="라이브로 흘릴 최근 거래일 수")
     pp.add_argument("--cash", type=float, default=10_000_000)
     pp.add_argument("--k", type=float, default=0.5, help="변동성 돌파 계수")
+    pp.add_argument("--log", default="logs/khali_events.jsonl", help="이벤트 로그 파일 경로")
     pp.set_defaults(func=_paper)
 
     lv = sub.add_parser("live", help="KIS 모의/실거래 1회 실행 (.env 키 필요)")
@@ -132,6 +138,7 @@ def main() -> None:
                     help="실제 주문 제출 (기본은 dry-run, 주문 미제출)")
     lv.add_argument("--allow-live", action="store_true",
                     help="실전 계좌 주문 허용 (모의 검증 후에만!)")
+    lv.add_argument("--log", default="logs/khali_events.jsonl", help="이벤트 로그 파일 경로")
     lv.set_defaults(func=_live)
 
     args = parser.parse_args()
