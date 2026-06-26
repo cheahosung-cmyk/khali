@@ -53,7 +53,8 @@ class PaperBroker(Broker):
             self.account.cash -= total
             pos = self.account.positions.get(order.symbol) or Position(order.symbol)
             new_qty = pos.qty + order.qty
-            pos.avg_price = (pos.avg_price * pos.qty + cost) / new_qty
+            # 수수료 포함 완전원가(fully-loaded) 기준 평단가 → 실현손익이 순액
+            pos.avg_price = (pos.avg_price * pos.qty + total) / new_qty
             pos.qty = new_qty
             self.account.positions[order.symbol] = pos
         else:  # SELL
@@ -65,7 +66,10 @@ class PaperBroker(Broker):
             proceeds = fill * order.qty
             fee = proceeds * self.fee_rate
             tax = proceeds * self.tax_rate
-            self.account.cash += proceeds - fee - tax
+            net = proceeds - fee - tax
+            self.account.cash += net
+            # 실현손익 = 순매도대금 − 완전원가(평단가는 매수 수수료 포함)
+            order.realized_pnl = net - pos.avg_price * order.qty
             pos.qty -= order.qty
             if pos.qty == 0:
                 pos.avg_price = 0.0

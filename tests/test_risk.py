@@ -1,5 +1,7 @@
 """리스크 매니저 단위 테스트 — 가장 중요한 안전장치."""
 
+from datetime import date
+
 from khali.models import Account, Position, Side, Signal
 from khali.risk.manager import RiskConfig, RiskManager
 
@@ -8,12 +10,30 @@ def _buy(symbol="A", price=100.0, stop=95.0):
     return Signal(symbol, Side.BUY, price, stop_price=stop)
 
 
-def test_kill_switch_blocks_buys():
+def test_kill_switch_blocks_buys_on_day_over_day_loss():
     rm = RiskManager(RiskConfig(daily_max_loss_pct=0.03), start_equity=1_000_000)
-    rm.check_daily_loss(equity=950_000)  # -5% > 3% → halt
+    rm.observe(1_000_000, date(2026, 1, 1))      # 1일차 기준 확립
+    rm.observe(950_000, date(2026, 1, 2))        # 전일比 -5% > 3% → 정지
     assert rm.halted
     acct = Account(cash=1_000_000)
     assert rm.size_order(_buy(), acct, price=100.0) == 0
+
+
+def test_kill_switch_not_triggered_intraday_reset_bug():
+    # 매 봉 같은 자본을 주면(일봉 1봉/일) 손실 0 → 정지되지 않아야 정상
+    rm = RiskManager(RiskConfig(daily_max_loss_pct=0.03), start_equity=1_000_000)
+    rm.observe(1_000_000, date(2026, 1, 1))
+    rm.observe(1_000_000, date(2026, 1, 2))
+    assert not rm.halted
+
+
+def test_kill_switch_clears_on_new_day():
+    rm = RiskManager(RiskConfig(daily_max_loss_pct=0.03), start_equity=1_000_000)
+    rm.observe(1_000_000, date(2026, 1, 1))
+    rm.observe(950_000, date(2026, 1, 2))        # 정지
+    assert rm.halted
+    rm.observe(950_000, date(2026, 1, 3))        # 새 날, 전일比 0% → 해제
+    assert not rm.halted
 
 
 def test_sell_returns_full_position():

@@ -68,6 +68,8 @@ class Order:
     broker_order_id: str | None = None
     reason: str = ""
     ts: datetime | None = None
+    # 청산(SELL) 체결 시 실현손익(수수료·세금 반영). 매수는 0.
+    realized_pnl: float = 0.0
 
 
 @dataclass

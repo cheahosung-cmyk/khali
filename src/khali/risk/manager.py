@@ -24,38 +24,55 @@ class RiskConfig:
     max_open_positions: int = 5
     # 기본 손절폭 비율 (전략이 stop_price를 안 줄 때 fallback)
     default_stop_pct: float = 0.05
+    # 현금 한도 계산 시 수수료/슬리피지 여유분 (전량 거부 방지)
+    cash_buffer: float = 0.005
 
 
 class RiskManager:
     def __init__(self, config: RiskConfig, start_equity: float):
         self.config = config
-        self.start_of_day_equity = start_equity
+        # 기준 자본 = 직전 거래일 마지막 평가자본(전일 종가 기준). 첫날은 시작자본.
+        self._baseline_equity = start_equity
+        self._last_equity = start_equity
+        self._day = None
         self._halted = False
 
     @property
     def halted(self) -> bool:
         return self._halted
 
-    def start_new_day(self, equity: float) -> None:
-        """매 거래일 시작 시 기준 자본을 리셋하고 정지를 해제한다."""
-        self.start_of_day_equity = equity
-        self._halted = False
+    def observe(self, equity: float, day) -> bool:
+        """매 봉 호출. 새 거래일이면 전일 마지막 자본을 기준선으로 승격하고
+        kill-switch를 해제한다. 그 뒤 현재 자본이 기준선 대비 한도를 넘으면 정지.
 
-    def check_daily_loss(self, equity: float) -> bool:
-        """일일 손실 한도 초과 여부. 초과 시 kill-switch 발동."""
-        loss = (self.start_of_day_equity - equity) / self.start_of_day_equity
-        if loss >= self.config.daily_max_loss_pct:
-            self._halted = True
+        일봉에선 '전일 종가 자본 대비 당일 자본' 비교가 되어 한도가 실제로
+        작동한다(이전엔 매 봉 기준을 현재값으로 리셋해 영구 무력화됐음).
+        장중(하루 여러 봉)에선 기준선이 그날 동안 고정돼 누적 낙폭을 잡는다.
+        """
+        if day != self._day:
+            if self._day is not None:
+                self._baseline_equity = self._last_equity  # 전일 마지막 자본
+            self._day = day
+            self._halted = False
+        self._last_equity = equity
+        if self._baseline_equity > 0:
+            loss = (self._baseline_equity - equity) / self._baseline_equity
+            if loss >= self.config.daily_max_loss_pct:
+                self._halted = True
         return self._halted
 
     def size_order(
-        self, signal: Signal, account: Account, price: float
+        self, signal: Signal, account: Account, price: float,
+        marks: dict[str, float] | None = None,
     ) -> int:
         """신호를 실제 주문 수량(주)으로 변환. 거부 시 0 반환.
 
         매도(청산)는 보유 수량 전량을 반환한다.
         매수는 (1) kill-switch (2) 종목수 한도 (3) ATR/손절 기반 사이징
         (4) 단일종목 비중 상한 (5) 현금 한도를 차례로 적용한다.
+
+        marks: 전체 종목의 현재가. 자본(equity) 평가에 사용한다. 없으면 신호
+        종목만 현재가로 평가(타 보유는 원가) — 단일종목 백테스트용 폴백.
         """
         pos = account.positions.get(signal.symbol)
 
@@ -72,7 +89,7 @@ class RiskManager:
             if open_count >= self.config.max_open_positions:
                 return 0
 
-        equity = account.equity({signal.symbol: price})
+        equity = account.equity(marks if marks else {signal.symbol: price})
 
         # 손절폭: 전략 제안 우선, 없으면 기본 비율
         if signal.stop_price is not None and signal.stop_price < price:
@@ -90,8 +107,8 @@ class RiskManager:
         max_notional = equity * self.config.max_position_pct
         qty_by_concentration = int(max_notional // price)
 
-        # 현금 한도
-        qty_by_cash = int(account.cash // price)
+        # 현금 한도 (수수료/슬리피지 여유분 반영 → 전량 거부 방지)
+        qty_by_cash = int(account.cash // (price * (1 + self.config.cash_buffer)))
 
         qty = min(qty_by_risk, qty_by_concentration, qty_by_cash)
         return max(qty, 0)

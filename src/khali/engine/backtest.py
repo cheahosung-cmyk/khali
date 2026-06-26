@@ -23,22 +23,19 @@ def execute_signal(
     bar: Bar,
     signal,
     result: "BacktestResult",
+    marks: dict[str, float] | None = None,
 ) -> None:
     """신호 1개를 리스크 사이징→체결가 클램프→주문→성과 집계까지 처리한다.
 
     단일종목·포트폴리오 엔진이 공유하는 체결 코어. 체결가는 전략이 정한
     signal.price를 당일 [저,고]로 클램프해 submit에 명시한다(평가 마크는
-    종가로 유지되므로 set_mark 토글이 필요 없다).
+    종가로 유지되므로 set_mark 토글이 필요 없다). marks는 자본 평가용 전체
+    현재가 dict(포트폴리오 사이징 정확도).
     """
-    qty = risk.size_order(signal, account, bar.close)
+    qty = risk.size_order(signal, account, bar.close, marks=marks)
     if qty <= 0:
         return
     fill = max(bar.low, min(signal.price, bar.high))
-    entry_price = (
-        account.positions[signal.symbol].avg_price
-        if signal.side == Side.SELL and signal.symbol in account.positions
-        else fill
-    )
     order = Order(
         symbol=signal.symbol,
         side=signal.side,
@@ -50,7 +47,7 @@ def execute_signal(
     filled = broker.submit(order, ref_price=fill)
     if filled.status == OrderStatus.FILLED and signal.side == Side.SELL:
         result.trades += 1
-        if filled.filled_price > entry_price:
+        if filled.realized_pnl > 0:  # 수수료·세금 반영한 순손익 기준 승패
             result.wins += 1
 
 
@@ -104,7 +101,6 @@ def run_backtest(
         risk = RiskManager(RiskConfig(), starting_cash)
 
     result = BacktestResult(start_equity=starting_cash)
-    last_day = None
 
     for bar in bars:
         broker.set_mark(bar.symbol, bar.close)
@@ -112,16 +108,12 @@ def run_backtest(
         marks = {bar.symbol: bar.close}
         equity_now = account.equity(marks)
 
-        # 거래일 전환 시 리스크 일일 한도 리셋
-        day = bar.ts.date()
-        if day != last_day:
-            risk.start_new_day(equity_now)
-            last_day = day
-        risk.check_daily_loss(equity_now)
+        # 일일 손실 kill-switch (전일 종가자본 대비 당일 자본)
+        risk.observe(equity_now, bar.ts.date())
 
         position = account.positions.get(bar.symbol) or Position(bar.symbol)
         for signal in strategy.on_bar(bar, position):
-            execute_signal(broker, risk, account, bar, signal, result)
+            execute_signal(broker, risk, account, bar, signal, result, marks)
 
         result.equity_curve.append(account.equity(marks))
 

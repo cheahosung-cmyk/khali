@@ -69,8 +69,8 @@ def run_portfolio_backtest(
 
         account = broker.get_account()
         equity_now = account.equity(marks)
-        risk.start_new_day(equity_now)
-        risk.check_daily_loss(equity_now)
+        # 일일 손실 kill-switch (전일 종가자본 대비 당일 자본)
+        risk.observe(equity_now, date)
 
         for sym, bar in todays.items():
             broker.set_mark(sym, bar.close)
@@ -79,7 +79,7 @@ def run_portfolio_backtest(
                 # 선별에서 빠진 종목은 신규 진입 금지(청산은 허용)
                 if sig.side == Side.BUY and sym not in allowed:
                     continue
-                execute_signal(broker, risk, account, bar, sig, result)
+                execute_signal(broker, risk, account, bar, sig, result, marks)
 
         # 오늘 봉을 history에 반영 (의사결정 이후 → 룩어헤드 차단)
         for sym, bar in todays.items():
