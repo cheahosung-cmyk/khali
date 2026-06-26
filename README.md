@@ -44,12 +44,16 @@ src/khali/
 # 1) 백테스트 (외부 의존성 없이 합성 데이터로 즉시 실행)
 PYTHONPATH=src python -m khali.main backtest --symbol 005930 --k 0.5 --ma 5
 
-# 2) 테스트
+# 2) 페이퍼 실시간 루프 데모 (실데이터, 키 불필요)
+PYTHONPATH=src python -m khali.main paper --ticks 15
+
+# 3) 테스트
 PYTHONPATH=src python -m pytest tests/ -v
 
-# 3) 실거래 준비 (선택)
+# 4) 실거래 준비 (선택)
 cp config/.env.example .env   # 키 입력 후
 # KIS Developers에서 키 발급 → 모의투자(KIS_IS_PAPER=true)부터
+# LiveSession의 PaperBroker를 KISBroker로 교체하면 모의/실거래 구동
 ```
 
 ## 로드맵
@@ -58,9 +62,10 @@ cp config/.env.example .env   # 키 입력 후
 - [x] 실데이터 피드(네이버) + 룩어헤드 제거 + 체결가 모델링
 - [x] 추세보유 전략(오버나잇 + ATR 트레일링 스톱)
 - [x] 모멘텀 종목선별 + **시점기준 멀티종목 포트폴리오 엔진**
-- [ ] KIS 어댑터 실구현 (OAuth 토큰 캐시, 주문/잔고/현재가, 레이트리밋)
-- [ ] 페이퍼(KIS 모의투자) 실시간 루프
-- [ ] 워크포워드 최적화 / 파라미터 견고성 검증 (과최적화 방지)
+- [x] KIS 어댑터 실구현 (OAuth 토큰 캐시, 주문/잔고/현재가)
+- [x] 파라미터 견고성 검증 (스윕 7/9 양수, 과최적화 아님)
+- [x] **실시간 페이퍼 루프** (`LiveSession`) — 백테스트와 동일 코드, 브로커만 교체
+- [ ] KIS 모의투자 실계좌 연결 (키 발급 후) → 소액 실전
 - [ ] 모니터링/알림(텔레그램) + 운영 로깅
 
 ### 검증 요약 (실데이터, 정직한 시점기준)

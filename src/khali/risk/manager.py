@@ -103,9 +103,10 @@ class RiskManager:
         risk_capital = equity * self.config.risk_per_trade
         qty_by_risk = int(risk_capital // stop_dist)
 
-        # 단일 종목 비중 상한
-        max_notional = equity * self.config.max_position_pct
-        qty_by_concentration = int(max_notional // price)
+        # 단일 종목 비중 상한 (기존 보유분을 제외한 추가 가능 금액 기준)
+        current_value = pos.market_value(price) if pos else 0.0
+        max_notional = equity * self.config.max_position_pct - current_value
+        qty_by_concentration = int(max(max_notional, 0.0) // price)
 
         # 현금 한도 (수수료/슬리피지 여유분 반영 → 전량 거부 방지)
         qty_by_cash = int(account.cash // (price * (1 + self.config.cash_buffer)))

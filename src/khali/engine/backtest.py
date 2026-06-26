@@ -24,17 +24,17 @@ def execute_signal(
     signal,
     result: "BacktestResult",
     marks: dict[str, float] | None = None,
-) -> None:
+) -> Order | None:
     """신호 1개를 리스크 사이징→체결가 클램프→주문→성과 집계까지 처리한다.
 
-    단일종목·포트폴리오 엔진이 공유하는 체결 코어. 체결가는 전략이 정한
-    signal.price를 당일 [저,고]로 클램프해 submit에 명시한다(평가 마크는
-    종가로 유지되므로 set_mark 토글이 필요 없다). marks는 자본 평가용 전체
-    현재가 dict(포트폴리오 사이징 정확도).
+    단일종목·포트폴리오·라이브 엔진이 공유하는 체결 코어. 체결가는 전략이
+    정한 signal.price를 당일 [저,고]로 클램프해 submit에 명시한다. marks는
+    자본 평가용 전체 현재가 dict(포트폴리오 사이징 정확도). 체결된 Order를
+    반환하고(로깅·모니터링용), 사이징 0이면 None을 반환한다.
     """
     qty = risk.size_order(signal, account, bar.close, marks=marks)
     if qty <= 0:
-        return
+        return None
     fill = max(bar.low, min(signal.price, bar.high))
     order = Order(
         symbol=signal.symbol,
@@ -49,6 +49,7 @@ def execute_signal(
         result.trades += 1
         if filled.realized_pnl > 0:  # 수수료·세금 반영한 순손익 기준 승패
             result.wins += 1
+    return filled
 
 
 @dataclass

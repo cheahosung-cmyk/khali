@@ -64,9 +64,15 @@ def from_naver(
         headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://finance.naver.com/"}
         resp = requests.get(url, params=params, headers=headers, timeout=30)
         resp.raise_for_status()
-        # 응답은 JSON 유사 텍스트(작은따옴표/개행 포함) → 정규화 후 파싱
-        text = resp.text.strip().replace("'", '"')
-        raw = json.loads(text)
+        # 응답은 JSON 유사 텍스트(개행 포함, 따옴표 스타일이 엔드포인트마다 다름).
+        # 표준 JSON 우선 파싱, 실패 시 파이썬 리터럴로 안전 파싱(코드 실행 없음).
+        text = resp.text.strip()
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError:
+            import ast
+
+            raw = ast.literal_eval(text)
         if use_cache:
             _CACHE_DIR.mkdir(parents=True, exist_ok=True)
             cache_file.write_text(json.dumps(raw))

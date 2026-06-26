@@ -98,6 +98,8 @@ class TrendBreakout(Strategy):
                             reason=f"돌파 진입 target={target:.1f} k={self.k}",
                         )
                     )
+                    # 진입봉의 고가로 트레일 고점을 시드(다음 봉부터 누락 방지)
+                    self._trail_high = bar.high
 
         # 상태 갱신 (의사결정 이후)
         if prev is not None:
