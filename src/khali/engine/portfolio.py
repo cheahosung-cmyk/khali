@@ -16,8 +16,8 @@ from typing import Callable
 
 from khali.analysis.momentum import rank_by_momentum
 from khali.broker.paper import PaperBroker
-from khali.engine.backtest import BacktestResult
-from khali.models import Bar, Order, OrderStatus, OrderType, Position, Side
+from khali.engine.backtest import BacktestResult, execute_signal
+from khali.models import Bar, Position, Side
 from khali.risk.manager import RiskConfig, RiskManager
 from khali.strategy.base import Strategy
 
@@ -68,8 +68,9 @@ def run_portfolio_backtest(
             marks[sym] = bar.close
 
         account = broker.get_account()
-        risk.start_new_day(account.equity(marks))
-        risk.check_daily_loss(account.equity(marks))
+        equity_now = account.equity(marks)
+        risk.start_new_day(equity_now)
+        risk.check_daily_loss(equity_now)
 
         for sym, bar in todays.items():
             broker.set_mark(sym, bar.close)
@@ -78,31 +79,12 @@ def run_portfolio_backtest(
                 # 선별에서 빠진 종목은 신규 진입 금지(청산은 허용)
                 if sig.side == Side.BUY and sym not in allowed:
                     continue
-                qty = risk.size_order(sig, account, bar.close)
-                if qty <= 0:
-                    continue
-                fill = max(bar.low, min(sig.price, bar.high))
-                broker.set_mark(sym, fill)
-                entry = (
-                    account.positions[sym].avg_price
-                    if sig.side == Side.SELL and sym in account.positions
-                    else fill
-                )
-                order = Order(
-                    symbol=sym, side=sig.side, qty=qty,
-                    order_type=OrderType.MARKET, reason=sig.reason, ts=bar.ts,
-                )
-                filled = broker.submit(order)
-                broker.set_mark(sym, bar.close)  # 평가용 복원
-                if filled.status == OrderStatus.FILLED and sig.side == Side.SELL:
-                    result.trades += 1
-                    if filled.filled_price > entry:
-                        result.wins += 1
+                execute_signal(broker, risk, account, bar, sig, result)
 
         # 오늘 봉을 history에 반영 (의사결정 이후 → 룩어헤드 차단)
         for sym, bar in todays.items():
             histories[sym].append(bar)
-        result.equity_curve.append(broker.get_account().equity(marks))
+        result.equity_curve.append(account.equity(marks))
 
     result.end_equity = (
         result.equity_curve[-1] if result.equity_curve else starting_cash

@@ -13,8 +13,12 @@ from khali.models import Account, Order
 
 class Broker(ABC):
     @abstractmethod
-    def submit(self, order: Order) -> Order:
-        """주문을 제출하고 체결 결과가 반영된 Order를 반환한다."""
+    def submit(self, order: Order, ref_price: float | None = None) -> Order:
+        """주문을 제출하고 체결 결과가 반영된 Order를 반환한다.
+
+        ref_price: 백테스트/페이퍼에서 체결 기준가를 명시할 때 사용. 실거래
+        브로커는 시장이 체결가를 정하므로 무시한다.
+        """
 
     @abstractmethod
     def get_account(self) -> Account:

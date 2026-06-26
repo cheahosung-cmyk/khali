@@ -9,10 +9,49 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from khali.broker.base import Broker
 from khali.broker.paper import PaperBroker
-from khali.models import Bar, Order, OrderStatus, OrderType, Side
+from khali.models import Account, Bar, Order, OrderStatus, OrderType, Position, Side
 from khali.risk.manager import RiskManager
 from khali.strategy.base import Strategy
+
+
+def execute_signal(
+    broker: Broker,
+    risk: RiskManager,
+    account: Account,
+    bar: Bar,
+    signal,
+    result: "BacktestResult",
+) -> None:
+    """신호 1개를 리스크 사이징→체결가 클램프→주문→성과 집계까지 처리한다.
+
+    단일종목·포트폴리오 엔진이 공유하는 체결 코어. 체결가는 전략이 정한
+    signal.price를 당일 [저,고]로 클램프해 submit에 명시한다(평가 마크는
+    종가로 유지되므로 set_mark 토글이 필요 없다).
+    """
+    qty = risk.size_order(signal, account, bar.close)
+    if qty <= 0:
+        return
+    fill = max(bar.low, min(signal.price, bar.high))
+    entry_price = (
+        account.positions[signal.symbol].avg_price
+        if signal.side == Side.SELL and signal.symbol in account.positions
+        else fill
+    )
+    order = Order(
+        symbol=signal.symbol,
+        side=signal.side,
+        qty=qty,
+        order_type=OrderType.MARKET,
+        reason=signal.reason,
+        ts=bar.ts,
+    )
+    filled = broker.submit(order, ref_price=fill)
+    if filled.status == OrderStatus.FILLED and signal.side == Side.SELL:
+        result.trades += 1
+        if filled.filled_price > entry_price:
+            result.wins += 1
 
 
 @dataclass
@@ -70,54 +109,21 @@ def run_backtest(
     for bar in bars:
         broker.set_mark(bar.symbol, bar.close)
         account = broker.get_account()
+        marks = {bar.symbol: bar.close}
+        equity_now = account.equity(marks)
 
         # 거래일 전환 시 리스크 일일 한도 리셋
         day = bar.ts.date()
         if day != last_day:
-            risk.start_new_day(account.equity({bar.symbol: bar.close}))
+            risk.start_new_day(equity_now)
             last_day = day
-
-        position = account.positions.get(bar.symbol)
-        from khali.models import Position
-
-        position = position or Position(bar.symbol)
-
-        # kill-switch 점검
-        equity_now = account.equity({bar.symbol: bar.close})
         risk.check_daily_loss(equity_now)
 
+        position = account.positions.get(bar.symbol) or Position(bar.symbol)
         for signal in strategy.on_bar(bar, position):
-            qty = risk.size_order(signal, account, bar.close)
-            if qty <= 0:
-                continue
+            execute_signal(broker, risk, account, bar, signal, result)
 
-            # 체결가는 전략이 정한 signal.price를 당일 [저,고] 범위로 클램프
-            # 만 한다(전문가 수정: 갭 모델링 책임은 데이터를 가진 전략으로 이관).
-            fill_ref = max(bar.low, min(signal.price, bar.high))
-            broker.set_mark(bar.symbol, fill_ref)
-
-            entry_price = (
-                account.positions[signal.symbol].avg_price
-                if signal.side == Side.SELL
-                and signal.symbol in account.positions
-                else fill_ref
-            )
-            order = Order(
-                symbol=signal.symbol,
-                side=signal.side,
-                qty=qty,
-                order_type=OrderType.MARKET,
-                reason=signal.reason,
-                ts=bar.ts,
-            )
-            filled = broker.submit(order)
-            broker.set_mark(bar.symbol, bar.close)  # 평가용 복원
-            if filled.status == OrderStatus.FILLED and signal.side == Side.SELL:
-                result.trades += 1
-                if filled.filled_price > entry_price:
-                    result.wins += 1
-
-        result.equity_curve.append(broker.get_account().equity({bar.symbol: bar.close}))
+        result.equity_curve.append(account.equity(marks))
 
     result.end_equity = result.equity_curve[-1] if result.equity_curve else starting_cash
     return result

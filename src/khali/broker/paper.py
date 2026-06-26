@@ -34,8 +34,9 @@ class PaperBroker(Broker):
     def get_account(self) -> Account:
         return self.account
 
-    def submit(self, order: Order) -> Order:
-        ref = self._marks.get(order.symbol)
+    def submit(self, order: Order, ref_price: float | None = None) -> Order:
+        # 체결 기준가: 명시되면 그 값을, 아니면 현재 평가 마크를 사용
+        ref = ref_price if ref_price is not None else self._marks.get(order.symbol)
         if ref is None or order.qty <= 0:
             order.status = OrderStatus.REJECTED
             return order

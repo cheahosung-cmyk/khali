@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections import deque
 
+from khali.analysis.indicators import sma, true_range
 from khali.models import Bar, Position, Side, Signal
 from khali.strategy.base import Strategy
 
@@ -40,15 +41,11 @@ class VolatilityBreakout(Strategy):
 
     @property
     def atr(self) -> float | None:
-        if len(self._true_ranges) < self.atr_window:
-            return None
-        return sum(self._true_ranges) / len(self._true_ranges)
+        return sma(self._true_ranges, self.atr_window)
 
     def _moving_average(self) -> float | None:
         """전일까지의 완료된 종가 기준 이동평균 (룩어헤드 없음)."""
-        if len(self._closes) < self.ma_window:
-            return None
-        return sum(self._closes) / len(self._closes)
+        return sma(self._closes, self.ma_window)
 
     def on_bar(self, bar: Bar, position: Position) -> list[Signal]:
         signals: list[Signal] = []
@@ -89,12 +86,7 @@ class VolatilityBreakout(Strategy):
 
         # --- 다음 봉을 위한 상태 갱신 (의사결정 이후) ---
         if prev is not None:
-            tr = max(
-                bar.high - bar.low,
-                abs(bar.high - prev.close),
-                abs(bar.low - prev.close),
-            )
-            self._true_ranges.append(tr)
+            self._true_ranges.append(true_range(bar.high, bar.low, prev.close))
         self._closes.append(bar.close)
         self._prev_bar = bar
         return signals

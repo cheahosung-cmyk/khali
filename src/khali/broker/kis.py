@@ -162,8 +162,10 @@ class KISBroker(Broker):
         return Account(cash=cash, positions=positions)
 
     # ----------------------------------------------------------------- 주문
-    def submit(self, order: Order) -> Order:
+    def submit(self, order: Order, ref_price: float | None = None) -> Order:
         """현금 주문 전송. POST /uapi/domestic-stock/v1/trading/order-cash.
+
+        ref_price는 백테스트 체결가 주입용이라 실거래에선 무시한다(시장가).
 
         ⚠️ 실제 주문이 발생한다. ORD_DVSN '01'=시장가(시장가는 ORD_UNPR='0').
         KIS 응답(rt_cd='0')은 *접수* 성공이며, 실제 체결 확인은 별도 조회가
