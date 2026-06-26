@@ -65,12 +65,7 @@ class LiveSession:
         self.on_event({"type": "warmup_done",
                        "bars": sum(len(v) for v in self.histories.values())})
 
-    def step(self, todays_bars: dict[str, Bar]) -> None:
-        """하루치 봉(dict[종목, 봉])을 처리한다. 장 마감 후 1회 호출."""
-        if not todays_bars:
-            return
-
-        # 모멘텀 리밸런스 (그날까지 완료된 history만 사용 → 룩어헤드 없음)
+    def _rebalance(self, todays_bars: dict[str, Bar]) -> None:
         if self._since_rebalance >= self.rebalance_days:
             self._allowed = set(
                 rank_by_momentum(self.histories, self.lookback, self.top_n)
@@ -78,9 +73,42 @@ class LiveSession:
             self._since_rebalance = 0
             self.on_event({"type": "rebalance", "allowed": sorted(self._allowed)})
         self._since_rebalance += 1
-
         for sym, bar in todays_bars.items():
             self._marks[sym] = bar.close
+
+    def preview(self, todays_bars: dict[str, Bar]) -> list[dict]:
+        """주문을 **제출하지 않고** 산출될 주문(의도)만 반환한다(dry-run).
+
+        실거래 전 '오늘 무엇을 살/팔 것인가'를 안전하게 확인하는 용도.
+        주의: 전략 상태를 진행시키므로 같은 봉으로 이후 step()을 또 부르지 말 것.
+        """
+        if not todays_bars:
+            return []
+        self._rebalance(todays_bars)
+        account = self.broker.get_account()
+        intents: list[dict] = []
+        for sym, bar in todays_bars.items():
+            pos = account.positions.get(sym) or Position(sym)
+            for sig in self.strategies[sym].on_bar(bar, pos):
+                if sig.side == Side.BUY and sym not in self._allowed:
+                    continue
+                qty = self.risk.size_order(sig, account, bar.close, self._marks)
+                if qty > 0:
+                    intents.append({
+                        "symbol": sym, "side": sig.side.value, "qty": qty,
+                        "price": sig.price, "reason": sig.reason,
+                    })
+        for sym, bar in todays_bars.items():
+            self.histories[sym].append(bar)
+        return intents
+
+    def step(self, todays_bars: dict[str, Bar]) -> None:
+        """하루치 봉(dict[종목, 봉])을 처리한다. 장 마감 후 1회 호출."""
+        if not todays_bars:
+            return
+
+        # 모멘텀 리밸런스 (그날까지 완료된 history만 사용 → 룩어헤드 없음)
+        self._rebalance(todays_bars)
 
         account = self.broker.get_account()
         day = next(iter(todays_bars.values())).ts.date()

@@ -82,6 +82,27 @@ def _paper(args: argparse.Namespace) -> None:
           f"거래 {session.result.trades}회")
 
 
+def _live(args: argparse.Namespace) -> None:
+    """KIS 모의/실거래 라이브 1회 실행 (매 거래일 장 마감 후 호출 상정)."""
+    from khali.config import KISConfig
+    from khali.engine.live_runner import run_once
+
+    try:
+        config = KISConfig.from_env()
+    except RuntimeError as e:
+        print(f"⚠️  {e}")
+        print("config/.env.example를 복사해 .env에 KIS 키를 채우세요.")
+        return
+
+    mode = "모의투자" if config.is_paper else "⚠️ 실전투자"
+    action = "주문 실행" if args.execute else "dry-run(주문 미제출)"
+    print(f"=== KIS 라이브 [{mode}] — {action} ===")
+    try:
+        run_once(config, execute=args.execute, allow_live=args.allow_live)
+    except RuntimeError as e:
+        print(f"⛔ {e}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="khali", description="한국 주식 자동매매")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -105,6 +126,13 @@ def main() -> None:
     pp.add_argument("--cash", type=float, default=10_000_000)
     pp.add_argument("--k", type=float, default=0.5, help="변동성 돌파 계수")
     pp.set_defaults(func=_paper)
+
+    lv = sub.add_parser("live", help="KIS 모의/실거래 1회 실행 (.env 키 필요)")
+    lv.add_argument("--execute", action="store_true",
+                    help="실제 주문 제출 (기본은 dry-run, 주문 미제출)")
+    lv.add_argument("--allow-live", action="store_true",
+                    help="실전 계좌 주문 허용 (모의 검증 후에만!)")
+    lv.set_defaults(func=_live)
 
     args = parser.parse_args()
     args.func(args)

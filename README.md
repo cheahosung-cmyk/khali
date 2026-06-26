@@ -50,10 +50,12 @@ PYTHONPATH=src python -m khali.main paper --ticks 15
 # 3) 테스트
 PYTHONPATH=src python -m pytest tests/ -v
 
-# 4) 실거래 준비 (선택)
-cp config/.env.example .env   # 키 입력 후
-# KIS Developers에서 키 발급 → 모의투자(KIS_IS_PAPER=true)부터
-# LiveSession의 PaperBroker를 KISBroker로 교체하면 모의/실거래 구동
+# 4) KIS 모의투자 연동 (키 필요)
+cp config/.env.example .env          # KIS 키 입력, KIS_IS_PAPER=true
+PYTHONPATH=src python -m khali.main live              # dry-run: 오늘 살/팔 종목만 출력(주문X)
+PYTHONPATH=src python -m khali.main live --execute    # 모의계좌에 실제 주문 제출
+# 매 거래일 장 마감 후 cron 등으로 1회 실행하는 운용을 상정.
+# 실전 계좌(KIS_IS_PAPER=false)는 --execute --allow-live 둘 다 명시해야 주문됨.
 ```
 
 ## 로드맵

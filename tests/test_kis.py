@@ -48,6 +48,16 @@ class FakeSession:
         self.calls.append(("GET", url, headers, params, None))
         if url.endswith("/quotations/inquire-price"):
             return FakeResp({"output": {"stck_prpr": "71000"}})
+        if url.endswith("/quotations/inquire-daily-itemchartprice"):
+            # KIS는 최신순으로 반환 → daily_bars가 오름차순 정렬해야 한다
+            return FakeResp({"output2": [
+                {"stck_bsop_date": "20260103", "stck_oprc": "102", "stck_hgpr": "106",
+                 "stck_lwpr": "101", "stck_clpr": "105", "acml_vol": "1200"},
+                {"stck_bsop_date": "20260102", "stck_oprc": "100", "stck_hgpr": "104",
+                 "stck_lwpr": "99", "stck_clpr": "103", "acml_vol": "1000"},
+                {"stck_bsop_date": "20260101", "stck_oprc": "0", "stck_hgpr": "0",
+                 "stck_lwpr": "0", "stck_clpr": "0", "acml_vol": "0"},  # 거래정지 스킵
+            ]})
         if url.endswith("/trading/inquire-balance"):
             return FakeResp({
                 "output1": [{"pdno": "005930", "hldg_qty": "10", "pchs_avg_pric": "70000"}],
@@ -105,3 +115,12 @@ def test_submit_sell_uses_sell_tr_id(broker):
     broker.submit(Order(symbol="005930", side=Side.SELL, qty=2))
     order_call = [c for c in broker._session.calls if c[1].endswith("order-cash")][0]
     assert order_call[2]["tr_id"] == "VTTC0801U"
+
+
+def test_daily_bars_parses_and_sorts(broker):
+    bars = broker.daily_bars("005930", "20260101", "20260103")
+    # 거래정지(거래량 0) 봉은 제외, 오름차순 정렬
+    assert len(bars) == 2
+    assert bars[0].ts.strftime("%Y%m%d") == "20260102"
+    assert bars[1].ts.strftime("%Y%m%d") == "20260103"
+    assert bars[1].close == 105.0 and bars[1].open == 102.0
