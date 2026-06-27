@@ -19,10 +19,10 @@ from khali.risk.manager import RiskConfig, RiskManager
 from khali.strategy.trend_breakout import TrendBreakout
 from khali.strategy.volatility_breakout import VolatilityBreakout
 
-# 기본 유니버스 (대형주). 페이퍼 데모용.
+# 기본 유니버스 — 2015년 이전 상장 대형주만(장기 백테스트 생존편향 회피).
 DEFAULT_UNIVERSE = [
-    "005930", "000660", "035420", "005380", "051910",
-    "035720", "006400", "105560", "207940", "012330",
+    "005930", "000660", "005380", "051910", "035420",
+    "035720", "105560", "012330", "055550", "000270",
 ]
 
 
@@ -84,6 +84,25 @@ def _paper(args: argparse.Namespace) -> None:
           f"거래 {session.result.trades}회")
 
 
+def _rotation(args: argparse.Namespace) -> None:
+    """횡단면 상대강도 로테이션 백테스트 (실데이터)."""
+    from khali.engine.rotation import run_rotation_backtest
+
+    data = {s: feed.from_naver(s, args.start, args.end) for s in DEFAULT_UNIVERSE}
+    data = {s: b for s, b in data.items() if b}
+    cfg = RiskConfig(risk_per_trade=0.015, max_position_pct=0.25,
+                     daily_max_loss_pct=0.04, max_open_positions=5)
+    r = run_rotation_backtest(
+        data, starting_cash=args.cash, lookback=args.lookback, top_n=args.top_n,
+        rebalance_days=args.rebalance, risk_config=cfg, regime_filter=args.regime)
+    bh = sum(b[-1].close / b[0].close - 1 for b in data.values()) / len(data)
+    print(f"로테이션 (lookback={args.lookback} top_n={args.top_n} "
+          f"레짐게이트={'on' if args.regime else 'off'})")
+    print(f"종목 {len(data)}개  {args.start}~{args.end}")
+    print(r.summary())
+    print(f"균등 Buy&Hold 벤치마크: {bh:+.1%}")
+
+
 def _live(args: argparse.Namespace) -> None:
     """KIS 모의/실거래 라이브 1회 실행 (매 거래일 장 마감 후 호출 상정)."""
     from khali.config import KISConfig
@@ -132,6 +151,16 @@ def main() -> None:
     pp.add_argument("--k", type=float, default=0.5, help="변동성 돌파 계수")
     pp.add_argument("--log", default="logs/khali_events.jsonl", help="이벤트 로그 파일 경로")
     pp.set_defaults(func=_paper)
+
+    ro = sub.add_parser("rotation", help="횡단면 상대강도 로테이션 백테스트(실데이터)")
+    ro.add_argument("--start", default="20150101")
+    ro.add_argument("--end", default="20250101")
+    ro.add_argument("--cash", type=float, default=10_000_000)
+    ro.add_argument("--lookback", type=int, default=252, help="모멘텀 기간(일, 12개월≈252이 견고)")
+    ro.add_argument("--top-n", type=int, default=3, help="보유 종목 수")
+    ro.add_argument("--rebalance", type=int, default=20, help="리밸런스 주기(거래일)")
+    ro.add_argument("--regime", action="store_true", help="레짐 게이트(약세장 현금)")
+    ro.set_defaults(func=_rotation)
 
     lv = sub.add_parser("live", help="KIS 모의/실거래 1회 실행 (.env 키 필요)")
     lv.add_argument("--execute", action="store_true",

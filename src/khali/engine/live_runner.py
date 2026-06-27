@@ -23,8 +23,8 @@ from khali.strategy.base import Strategy
 from khali.strategy.trend_breakout import TrendBreakout
 
 DEFAULT_UNIVERSE = [
-    "005930", "000660", "035420", "005380", "051910",
-    "035720", "006400", "105560", "207940", "012330",
+    "005930", "000660", "005380", "051910", "035420",
+    "035720", "105560", "012330", "055550", "000270",
 ]
 
 
