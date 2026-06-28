@@ -103,6 +103,19 @@ def _rotation(args: argparse.Namespace) -> None:
     print(f"균등 Buy&Hold 벤치마크: {bh:+.1%}")
 
 
+def _hybrid(args: argparse.Namespace) -> None:
+    """B&H + 레짐 방어 하이브리드 백테스트 (실데이터)."""
+    from khali.engine.hybrid import run_hybrid_backtest
+
+    data = {s: feed.from_naver(s, args.start, args.end) for s in DEFAULT_UNIVERSE}
+    data = {s: b for s, b in data.items() if b}
+    r = run_hybrid_backtest(data, starting_cash=args.cash, ma=args.ma)
+    bh = sum(b[-1].close / b[0].close - 1 for b in data.values()) / len(data)
+    print(f"하이브리드 (MA={args.ma}, 약세장 현금)  종목 {len(data)}개  {args.start}~{args.end}")
+    print(r.summary())
+    print(f"균등 Buy&Hold 벤치마크: {bh:+.1%}  ← 방어 오버레이는 낙폭(MDD)을 본다")
+
+
 def _live(args: argparse.Namespace) -> None:
     """KIS 모의/실거래 라이브 1회 실행 (매 거래일 장 마감 후 호출 상정)."""
     from khali.config import KISConfig
@@ -161,6 +174,13 @@ def main() -> None:
     ro.add_argument("--rebalance", type=int, default=20, help="리밸런스 주기(거래일)")
     ro.add_argument("--regime", action="store_true", help="레짐 게이트(약세장 현금)")
     ro.set_defaults(func=_rotation)
+
+    hy = sub.add_parser("hybrid", help="B&H+레짐방어 하이브리드 백테스트(실데이터)")
+    hy.add_argument("--start", default="20150101")
+    hy.add_argument("--end", default="20250101")
+    hy.add_argument("--cash", type=float, default=10_000_000)
+    hy.add_argument("--ma", type=int, default=252, help="레짐 판정 이동평균(일)")
+    hy.set_defaults(func=_hybrid)
 
     lv = sub.add_parser("live", help="KIS 모의/실거래 1회 실행 (.env 키 필요)")
     lv.add_argument("--execute", action="store_true",
