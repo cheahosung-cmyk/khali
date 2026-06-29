@@ -1,0 +1,18 @@
+{
+  "_comment": "Apify 가 호스팅하는 원격 MCP 엔드포인트를 쓰는 방식입니다. npx/Node 설치가 필요 없고, 최신 Claude 데스크톱에서는 OAuth 로그인을 지원합니다. 아래처럼 url 만 넣으면 첫 연결 시 브라우저로 Apify 로그인 창이 뜹니다. 토큰을 헤더로 직접 넣고 싶으면 headers 블록의 주석을 참고하세요(이 경우 토큰이 파일에 남으니 주의).",
+
+  "mcpServers": {
+    "apify": {
+      "url": "https://mcp.apify.com?tools=actors,docs,apify/rag-web-browser,apify/instagram-scraper,streamers/youtube-scraper,apify/google-search-scraper"
+    }
+  },
+
+  "_headers_example": {
+    "apify": {
+      "url": "https://mcp.apify.com",
+      "headers": {
+        "Authorization": "Bearer <APIFY_TOKEN>"
+      }
+    }
+  }
+}
