@@ -103,6 +103,20 @@ def _rotation(args: argparse.Namespace) -> None:
     print(f"균등 Buy&Hold 벤치마크: {bh:+.1%}")
 
 
+def _dca(args: argparse.Namespace) -> None:
+    """적립식(매월 납입) 시뮬레이션 (실데이터)."""
+    from khali.engine.dca import run_dca
+
+    data = {s: feed.from_naver(s, args.start, args.end) for s in DEFAULT_UNIVERSE}
+    data = {s: b for s, b in data.items() if b}
+    r = run_dca(data, initial=args.initial, monthly=args.monthly, mode=args.mode)
+    years = (len(r.equity_curve) / 252) or 1
+    print(f"적립식 [{args.mode}] 초기 {args.initial:,.0f} + 매월 {args.monthly:,.0f}  "
+          f"({args.start}~{args.end})")
+    print(r.summary())
+    print(f"최종자산 기준 월 잠재소득(@6%): {r.final_equity * 0.06 / 12:,.0f}원")
+
+
 def _hybrid(args: argparse.Namespace) -> None:
     """B&H + 레짐 방어 하이브리드 백테스트 (실데이터)."""
     from khali.engine.hybrid import run_hybrid_backtest
@@ -174,6 +188,14 @@ def main() -> None:
     ro.add_argument("--rebalance", type=int, default=20, help="리밸런스 주기(거래일)")
     ro.add_argument("--regime", action="store_true", help="레짐 게이트(약세장 현금)")
     ro.set_defaults(func=_rotation)
+
+    dc = sub.add_parser("dca", help="적립식(매월 납입) 시뮬레이션(실데이터)")
+    dc.add_argument("--start", default="20150101")
+    dc.add_argument("--end", default="20250101")
+    dc.add_argument("--initial", type=float, default=1_000_000, help="초기 자본")
+    dc.add_argument("--monthly", type=float, default=500_000, help="매월 적립액")
+    dc.add_argument("--mode", choices=["bh", "hybrid"], default="bh")
+    dc.set_defaults(func=_dca)
 
     hy = sub.add_parser("hybrid", help="B&H+레짐방어 하이브리드 백테스트(실데이터)")
     hy.add_argument("--start", default="20150101")
