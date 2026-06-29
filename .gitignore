@@ -1,0 +1,32 @@
+# 환경 / 비밀
+.env
+*.env
+!.env.example
+
+# 로컬 단계 구성(예시는 추적)
+council.yaml
+council.yml
+council.json
+!council.example.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# 가상환경
+.venv/
+venv/
+env/
+
+# 에디터
+.vscode/
+.idea/
+.DS_Store
