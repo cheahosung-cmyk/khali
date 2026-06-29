@@ -57,6 +57,10 @@ class MockProvider(Provider):
                 "3. 주의: '확인 필요' 항목은 실제 데이터로 확정하세요."
             )
         else:
-            body = "모의 응답입니다."
+            # 사용자가 council.yaml 로 추가한 커스텀 단계
+            body = (
+                f"모의 응답('{role}' 단계): 입력을 받아 이 단계의 역할을 수행한 결과입니다.\n"
+                "- (실제 API 키를 넣으면 이 자리에 실제 모델 출력이 들어갑니다.)"
+            )
 
         return f"{header}\n입력 요약: {summary}\n\n{body}"

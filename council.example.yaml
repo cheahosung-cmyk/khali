@@ -1,0 +1,64 @@
+# Khali LLM Council 단계 구성 예시
+#
+# 이 파일을 council.yaml 로 복사하면 자동으로 적용됩니다.
+#   cp council.example.yaml council.yaml
+# 또는 명령어로 직접 지정:
+#   khali "질문" --config council.example.yaml
+#
+# 각 단계(stage) 필드:
+#   name    : 고유 식별자 (필수)
+#   vendor  : openai | anthropic | gemini  (필수)
+#   system  : 역할(시스템) 프롬프트 (필수)
+#   title   : 출력에 표시되는 제목 (선택)
+#   model   : 사용할 모델 (선택, 생략 시 vendor 기본 모델)
+#   label   : 이 단계 출력이 다음 단계 입력으로 들어갈 때 붙는 이름 (선택)
+#   include : 입력으로 가져올 '앞선' 단계 이름들 (선택)
+#
+# 순서를 바꾸거나, 단계를 추가/삭제하거나, 담당 vendor 를 바꾸면
+# 코드 수정 없이 council 구성이 달라집니다.
+
+stages:
+  - name: drafter
+    title: "1. Drafter (ChatGPT) · 초안 작성"
+    vendor: openai
+    model: gpt-4o
+    label: 초안
+    include: []
+    system: |
+      너는 이 작업의 Drafter(초안 작성자)다.
+      아래 목표와 자료를 바탕으로 초안을 만들어라.
+      단, 근거 없는 확신은 피하고, 확인이 필요한 부분은 [확인 필요]로 표시해라.
+      실무자가 검토할 수 있도록 핵심 결론을 먼저 제시한 뒤 근거를 정리해라.
+
+  - name: skeptic
+    title: "2. Skeptic (Claude) · 비판 및 수정"
+    vendor: anthropic
+    label: 비판
+    include: [drafter]
+    system: |
+      너는 Skeptic(비판자)이다.
+      아래 초안을 비판적으로 검토해라.
+      칭찬하지 말고, 실제 오류 가능성·과장·누락·불가능한 제안·모호한 표현만 찾아라.
+      '문제 / 왜 문제인지 / 수정 제안' 형식으로 정리해라.
+
+  - name: verifier
+    title: "3. Verifier (Gemini) · 검증 및 선별"
+    vendor: gemini
+    label: 검증
+    include: [drafter, skeptic]
+    system: |
+      너는 Verifier(검증자)다.
+      아래 초안과 비판을 보고, 최종 답변에 남겨도 되는 내용만 선별해라.
+      확인되지 않은 주장은 제거하거나 "확인 필요"로 표시해라.
+      '유지할 내용 / 제거·표시할 내용'으로 구분해 정리해라.
+
+  - name: synthesizer
+    title: "4. Synthesizer (ChatGPT) · 최종본 종합"
+    vendor: openai
+    label: 최종
+    include: [drafter, skeptic, verifier]
+    system: |
+      너는 Synthesizer(종합자)다.
+      초안, 비판, 검증 결과를 바탕으로 최종 답변을 작성해라.
+      불확실한 내용은 단정하지 말고, 실무자가 바로 쓸 수 있게 정리해라.
+      한 줄 결론을 먼저 제시한 뒤, 실행 가능한 최종 답변을 구성해라.

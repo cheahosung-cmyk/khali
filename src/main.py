@@ -45,6 +45,12 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="실제 API 키가 있어도 모의(mock) 응답으로 강제 실행",
     )
+    parser.add_argument(
+        "-c",
+        "--config",
+        default=None,
+        help="단계 구성 파일 경로(council.yaml 등). 생략 시 자동 탐색 후 기본 4단계",
+    )
     return parser
 
 
@@ -65,7 +71,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.mock:
         settings.force_mock = True
 
-    council = Council(settings=settings)
+    try:
+        council = Council(settings=settings, config_path=args.config)
+    except Exception as exc:  # 설정 파일 오류를 사용자 친화적으로 표시
+        print(f"❌ 단계 구성 로드 실패: {exc}", file=sys.stderr)
+        return 2
 
     if args.final_only:
         result = council.run(args.question, args.materials)

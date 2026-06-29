@@ -36,11 +36,13 @@ if _HAS_PYDANTIC_SETTINGS:
         anthropic_api_key: Optional[str] = Field(default=None)
         gemini_api_key: Optional[str] = Field(default=None)
 
-        # --- 각 단계에 쓸 모델명 ---
-        drafter_model: str = Field(default="gpt-4o")
-        skeptic_model: str = Field(default="claude-opus-4-8")
-        verifier_model: str = Field(default="gemini-1.5-pro")
-        synthesizer_model: str = Field(default="gpt-4o")
+        # --- vendor 별 기본 모델 (단계에서 model 을 지정하지 않으면 사용) ---
+        openai_model: str = Field(default="gpt-4o")
+        anthropic_model: str = Field(default="claude-opus-4-8")
+        gemini_model: str = Field(default="gemini-1.5-pro")
+
+        # --- 단계 구성 파일 경로 (없으면 council.yaml 자동 탐색 → 기본 4단계) ---
+        council_config: Optional[str] = Field(default=None)
 
         # --- mock 모드 강제 (실제 키가 있어도 mock 으로 동작) ---
         force_mock: bool = Field(default=False)
@@ -55,10 +57,10 @@ else:  # pragma: no cover - 폴백: 순수 os.environ 기반
         openai_api_key: Optional[str] = None
         anthropic_api_key: Optional[str] = None
         gemini_api_key: Optional[str] = None
-        drafter_model: str = "gpt-4o"
-        skeptic_model: str = "claude-opus-4-8"
-        verifier_model: str = "gemini-1.5-pro"
-        synthesizer_model: str = "gpt-4o"
+        openai_model: str = "gpt-4o"
+        anthropic_model: str = "claude-opus-4-8"
+        gemini_model: str = "gemini-1.5-pro"
+        council_config: Optional[str] = None
         force_mock: bool = False
 
         def __post_init__(self) -> None:
@@ -67,6 +69,9 @@ else:  # pragma: no cover - 폴백: 순수 os.environ 기반
                 "ANTHROPIC_API_KEY"
             )
             self.gemini_api_key = self.gemini_api_key or os.environ.get("GEMINI_API_KEY")
+            self.council_config = self.council_config or os.environ.get(
+                "COUNCIL_CONFIG"
+            )
             self.force_mock = self.force_mock or os.environ.get(
                 "FORCE_MOCK", ""
             ).lower() in ("1", "true", "yes")

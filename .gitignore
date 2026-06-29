@@ -3,6 +3,12 @@
 *.env
 !.env.example
 
+# 로컬 단계 구성(예시는 추적)
+council.yaml
+council.yml
+council.json
+!council.example.yaml
+
 # Python
 __pycache__/
 *.py[cod]

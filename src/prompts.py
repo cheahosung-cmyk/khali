@@ -37,39 +37,5 @@ SYNTHESIZER_SYSTEM = """너는 Synthesizer(종합자)다.
 불확실한 내용은 단정하지 말고, 실무자가 바로 쓸 수 있게 정리해라.
 한 줄 결론을 먼저 제시한 뒤, 실행 가능한 최종 답변을 구성해라."""
 
-
-def drafter_user(question: str, materials: str = "") -> str:
-    """Drafter 단계 사용자 프롬프트."""
-    return (
-        f"목표/질문:\n{question}\n\n"
-        f"자료:\n{materials or '(별도 자료 없음)'}\n"
-    )
-
-
-def skeptic_user(question: str, draft: str) -> str:
-    """Skeptic 단계 사용자 프롬프트."""
-    return (
-        f"원래 목표/질문:\n{question}\n\n"
-        f"검토할 초안:\n\"\"\"\n{draft}\n\"\"\"\n"
-    )
-
-
-def verifier_user(question: str, draft: str, critique: str) -> str:
-    """Verifier 단계 사용자 프롬프트."""
-    return (
-        f"원래 목표/질문:\n{question}\n\n"
-        f"초안:\n\"\"\"\n{draft}\n\"\"\"\n\n"
-        f"비판:\n\"\"\"\n{critique}\n\"\"\"\n"
-    )
-
-
-def synthesizer_user(
-    question: str, draft: str, critique: str, verification: str
-) -> str:
-    """Synthesizer 단계 사용자 프롬프트."""
-    return (
-        f"원래 목표/질문:\n{question}\n\n"
-        f"초안:\n\"\"\"\n{draft}\n\"\"\"\n\n"
-        f"비판:\n\"\"\"\n{critique}\n\"\"\"\n\n"
-        f"검증 결과:\n\"\"\"\n{verification}\n\"\"\"\n"
-    )
+# 참고: 단계별 사용자 프롬프트는 stages.build_user_prompt() 가 동적으로 생성한다.
+# (원래 질문 + 자료 + include 로 지정된 이전 단계 산출물 블록)

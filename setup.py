@@ -36,6 +36,7 @@ setup(
         "alembic>=1.12.1",
         "aiohttp>=3.9.1",
         "python-dotenv>=1.0.0",
+        "pyyaml>=6.0",
     ],
     extras_require={
         "dev": [
