@@ -103,6 +103,31 @@ def _rotation(args: argparse.Namespace) -> None:
     print(f"균등 Buy&Hold 벤치마크: {bh:+.1%}")
 
 
+def _plan(args: argparse.Namespace) -> None:
+    """현실적 적립 계획표 — 과거 모든 시작 시점 결과를 '범위'로."""
+    from khali.analysis.dca_planner import plan_dca, summarize
+
+    data = {s: feed.from_naver(s, "20150101", "20250101") for s in DEFAULT_UNIVERSE}
+    data = {s: b for s, b in data.items() if b}
+    outs = plan_dca(data, initial=args.initial, monthly=args.monthly,
+                    horizon_years=args.years, mode=args.mode)
+    s = summarize(outs)
+    if not s:
+        print("데이터 부족 — 기간을 줄여보세요.")
+        return
+    print(f"적립 계획 [{args.mode}]: 초기 {args.initial:,.0f} + 매월 {args.monthly:,.0f} "
+          f"× {args.years}년  (과거 {s['n']}개 시작시점)")
+    print(f"납입원금: {s['contributed']:,.0f}원\n")
+    print(f"{'시나리오':<10}{'최종자산':>14}{'수익률':>9}{'실질가치':>14}{'안전월소득':>11}")
+    print("-" * 60)
+    for label, key in [("나빴을때", "worst"), ("중간", "median"), ("잘됐을때", "best")]:
+        o = s[key]
+        print(f"{label:<10}{o.final_equity:>14,.0f}{o.profit_pct:>8.1%}"
+              f"{o.real_equity:>14,.0f}{o.swr_income:>11,.0f}")
+    print("\n※ 안전월소득=3.5% 인출 기준, 실질가치=인플레2.5% 보정. 세금 미반영.")
+    print("※ 같은 계획도 시작 시점에 따라 결과가 크게 다릅니다(보장 아님).")
+
+
 def _dca(args: argparse.Namespace) -> None:
     """적립식(매월 납입) 시뮬레이션 (실데이터)."""
     from khali.engine.dca import run_dca
@@ -188,6 +213,13 @@ def main() -> None:
     ro.add_argument("--rebalance", type=int, default=20, help="리밸런스 주기(거래일)")
     ro.add_argument("--regime", action="store_true", help="레짐 게이트(약세장 현금)")
     ro.set_defaults(func=_rotation)
+
+    pl = sub.add_parser("plan", help="현실적 적립 계획표 — 결과를 '범위'로(실데이터)")
+    pl.add_argument("--initial", type=float, default=1_000_000)
+    pl.add_argument("--monthly", type=float, default=300_000, help="매월 적립액")
+    pl.add_argument("--years", type=int, default=5, help="투자 기간(년)")
+    pl.add_argument("--mode", choices=["bh", "hybrid"], default="bh")
+    pl.set_defaults(func=_plan)
 
     dc = sub.add_parser("dca", help="적립식(매월 납입) 시뮬레이션(실데이터)")
     dc.add_argument("--start", default="20150101")
