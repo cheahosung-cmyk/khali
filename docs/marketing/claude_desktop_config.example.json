@@ -1,0 +1,17 @@
+{
+  "_comment": "Apify MCP 를 Claude 데스크톱에 연결하는 예시 설정입니다. 아래 두 가지 방식 중 하나를 골라 mcpServers 안에 넣으세요. <APIFY_TOKEN> 자리에 본인 Apify 토큰을 채운 뒤, 이 파일 내용을 실제 claude_desktop_config.json 에 복사합니다. 이 예시 파일은 토큰을 절대 채우지 말고 그대로 두세요.",
+
+  "mcpServers": {
+    "apify": {
+      "command": "npx",
+      "args": [
+        "@apify/actors-mcp-server",
+        "--tools",
+        "actors,docs,apify/rag-web-browser,apify/instagram-scraper,streamers/youtube-scraper,apify/google-search-scraper"
+      ],
+      "env": {
+        "APIFY_TOKEN": "<APIFY_TOKEN>"
+      }
+    }
+  }
+}
