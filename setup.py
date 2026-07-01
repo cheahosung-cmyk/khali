@@ -10,11 +10,12 @@ setup(
     version="0.1.0",
     author="cheahosung-cmyk",
     author_email="cheahosung@gmail.com",
-    description="AI Agent Management System",
+    description="한국 주식(KIS) 자동매매 시스템 — 백테스트·리스크·실거래 어댑터",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/cheahosung-cmyk/khali",
-    packages=find_packages(),
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
@@ -54,7 +55,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "khali=src.main:main",
+            "khali=khali.main:main",
         ],
     },
 )

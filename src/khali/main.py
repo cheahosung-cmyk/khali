@@ -1,0 +1,252 @@
+"""CLI 진입점.
+
+사용 예:
+    python -m khali.main backtest          # 합성 데이터로 백테스트
+    python -m khali.main backtest --csv data.csv --symbol 005930
+"""
+
+from __future__ import annotations
+
+import argparse
+
+from collections import defaultdict
+
+from khali.broker.paper import PaperBroker
+from khali.data import feed
+from khali.engine.backtest import run_backtest
+from khali.engine.live import LiveSession
+from khali.risk.manager import RiskConfig, RiskManager
+from khali.strategy.trend_breakout import TrendBreakout
+from khali.strategy.volatility_breakout import VolatilityBreakout
+
+# 기본 유니버스 — 2015년 이전 상장 대형주만(장기 백테스트 생존편향 회피).
+DEFAULT_UNIVERSE = [
+    "005930", "000660", "005380", "051910", "035420",
+    "035720", "105560", "012330", "055550", "000270",
+]
+
+
+def _backtest(args: argparse.Namespace) -> None:
+    if args.naver:
+        bars = feed.from_naver(args.symbol, args.start, args.end)
+    elif args.csv:
+        bars = list(feed.from_csv(args.csv, args.symbol))
+    else:
+        bars = list(feed.synthetic(args.symbol, days=args.days))
+
+    strategy = VolatilityBreakout(k=args.k, ma_window=args.ma)
+    risk = RiskManager(RiskConfig(), args.cash)
+    result = run_backtest(bars, strategy, starting_cash=args.cash, risk=risk)
+
+    print(f"전략: {strategy.name}  종목: {args.symbol}  봉: {len(bars)}")
+    print(result.summary())
+
+
+def _paper(args: argparse.Namespace) -> None:
+    """페이퍼(모의) 실시간 루프 데모.
+
+    네이버 실데이터를 받아 앞부분은 warmup, 최근 `ticks`일을 '라이브 틱'으로
+    하루씩 흘려 LiveSession을 구동한다. 같은 코드가 KISBroker로 교체되면
+    그대로 실거래(모의투자)가 된다.
+    """
+    data = {s: feed.from_naver(s, args.start, args.end) for s in DEFAULT_UNIVERSE}
+    data = {s: b for s, b in data.items() if b}
+
+    # 최근 ticks일을 라이브로, 그 이전을 warmup으로 분리
+    split = {s: b[:-args.ticks] for s, b in data.items()}
+    live = {s: b[-args.ticks:] for s, b in data.items()}
+
+    from khali.monitoring.event_logger import EventLogger
+
+    broker = PaperBroker(args.cash)
+    risk = RiskManager(RiskConfig(), args.cash)
+    session = LiveSession(
+        broker,
+        lambda: TrendBreakout(k=args.k, ma_window=20, atr_window=14, trail_mult=2.5),
+        risk, list(data.keys()),
+        lookback=120, top_n=3, rebalance_days=20,
+        on_event=EventLogger(args.log),
+    )
+    session.warmup(split)
+
+    # 라이브 틱을 날짜별로 묶어 하루씩 step
+    by_date: dict = defaultdict(dict)
+    for sym, bars in live.items():
+        for b in bars:
+            by_date[b.ts.date()][sym] = b
+    print(f"=== 페이퍼 실시간 루프 ({len(by_date)}일) ===")
+    for date in sorted(by_date):
+        print(f"[{date}]")
+        session.step(by_date[date])
+
+    ret = session.equity / args.cash - 1
+    print(f"\n최종 평가자본 {session.equity:,.0f}  수익률 {ret:+.2%}  "
+          f"거래 {session.result.trades}회")
+
+
+def _rotation(args: argparse.Namespace) -> None:
+    """횡단면 상대강도 로테이션 백테스트 (실데이터)."""
+    from khali.engine.rotation import run_rotation_backtest
+
+    data = {s: feed.from_naver(s, args.start, args.end) for s in DEFAULT_UNIVERSE}
+    data = {s: b for s, b in data.items() if b}
+    cfg = RiskConfig(risk_per_trade=0.015, max_position_pct=0.25,
+                     daily_max_loss_pct=0.04, max_open_positions=5)
+    r = run_rotation_backtest(
+        data, starting_cash=args.cash, lookback=args.lookback, top_n=args.top_n,
+        rebalance_days=args.rebalance, risk_config=cfg, regime_filter=args.regime)
+    bh = sum(b[-1].close / b[0].close - 1 for b in data.values()) / len(data)
+    print(f"로테이션 (lookback={args.lookback} top_n={args.top_n} "
+          f"레짐게이트={'on' if args.regime else 'off'})")
+    print(f"종목 {len(data)}개  {args.start}~{args.end}")
+    print(r.summary())
+    print(f"균등 Buy&Hold 벤치마크: {bh:+.1%}")
+
+
+def _plan(args: argparse.Namespace) -> None:
+    """현실적 적립 계획표 — 과거 모든 시작 시점 결과를 '범위'로."""
+    from khali.analysis.dca_planner import plan_dca, summarize
+
+    data = {s: feed.from_naver(s, "20150101", "20250101") for s in DEFAULT_UNIVERSE}
+    data = {s: b for s, b in data.items() if b}
+    outs = plan_dca(data, initial=args.initial, monthly=args.monthly,
+                    horizon_years=args.years, mode=args.mode)
+    s = summarize(outs)
+    if not s:
+        print("데이터 부족 — 기간을 줄여보세요.")
+        return
+    print(f"적립 계획 [{args.mode}]: 초기 {args.initial:,.0f} + 매월 {args.monthly:,.0f} "
+          f"× {args.years}년  (과거 {s['n']}개 시작시점)")
+    print(f"납입원금: {s['contributed']:,.0f}원\n")
+    print(f"{'시나리오':<10}{'최종자산':>14}{'수익률':>9}{'실질가치':>14}{'안전월소득':>11}")
+    print("-" * 60)
+    for label, key in [("나빴을때", "worst"), ("중간", "median"), ("잘됐을때", "best")]:
+        o = s[key]
+        print(f"{label:<10}{o.final_equity:>14,.0f}{o.profit_pct:>8.1%}"
+              f"{o.real_equity:>14,.0f}{o.swr_income:>11,.0f}")
+    print("\n※ 안전월소득=3.5% 인출 기준, 실질가치=인플레2.5% 보정. 세금 미반영.")
+    print("※ 같은 계획도 시작 시점에 따라 결과가 크게 다릅니다(보장 아님).")
+
+
+def _dca(args: argparse.Namespace) -> None:
+    """적립식(매월 납입) 시뮬레이션 (실데이터)."""
+    from khali.engine.dca import run_dca
+
+    data = {s: feed.from_naver(s, args.start, args.end) for s in DEFAULT_UNIVERSE}
+    data = {s: b for s, b in data.items() if b}
+    r = run_dca(data, initial=args.initial, monthly=args.monthly, mode=args.mode)
+    years = (len(r.equity_curve) / 252) or 1
+    print(f"적립식 [{args.mode}] 초기 {args.initial:,.0f} + 매월 {args.monthly:,.0f}  "
+          f"({args.start}~{args.end})")
+    print(r.summary())
+    print(f"최종자산 기준 월 잠재소득(@6%): {r.final_equity * 0.06 / 12:,.0f}원")
+
+
+def _hybrid(args: argparse.Namespace) -> None:
+    """B&H + 레짐 방어 하이브리드 백테스트 (실데이터)."""
+    from khali.engine.hybrid import run_hybrid_backtest
+
+    data = {s: feed.from_naver(s, args.start, args.end) for s in DEFAULT_UNIVERSE}
+    data = {s: b for s, b in data.items() if b}
+    r = run_hybrid_backtest(data, starting_cash=args.cash, ma=args.ma)
+    bh = sum(b[-1].close / b[0].close - 1 for b in data.values()) / len(data)
+    print(f"하이브리드 (MA={args.ma}, 약세장 현금)  종목 {len(data)}개  {args.start}~{args.end}")
+    print(r.summary())
+    print(f"균등 Buy&Hold 벤치마크: {bh:+.1%}  ← 방어 오버레이는 낙폭(MDD)을 본다")
+
+
+def _live(args: argparse.Namespace) -> None:
+    """KIS 모의/실거래 라이브 1회 실행 (매 거래일 장 마감 후 호출 상정)."""
+    from khali.config import KISConfig
+    from khali.engine.live_runner import run_once
+
+    try:
+        config = KISConfig.from_env()
+    except RuntimeError as e:
+        print(f"⚠️  {e}")
+        print("config/.env.example를 복사해 .env에 KIS 키를 채우세요.")
+        return
+
+    from khali.monitoring.event_logger import EventLogger
+
+    mode = "모의투자" if config.is_paper else "⚠️ 실전투자"
+    action = "주문 실행" if args.execute else "dry-run(주문 미제출)"
+    print(f"=== KIS 라이브 [{mode}] — {action} ===")
+    try:
+        run_once(config, execute=args.execute, allow_live=args.allow_live,
+                 on_event=EventLogger(args.log))
+    except RuntimeError as e:
+        print(f"⛔ {e}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="khali", description="한국 주식 자동매매")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    bt = sub.add_parser("backtest", help="전략 백테스트")
+    bt.add_argument("--naver", action="store_true", help="네이버 금융 실데이터 사용")
+    bt.add_argument("--start", default="20240101", help="실데이터 시작 YYYYMMDD")
+    bt.add_argument("--end", default="20260625", help="실데이터 종료 YYYYMMDD")
+    bt.add_argument("--csv", help="OHLCV CSV 경로 (없으면 합성 데이터)")
+    bt.add_argument("--symbol", default="005930", help="종목코드 (기본 삼성전자)")
+    bt.add_argument("--days", type=int, default=250)
+    bt.add_argument("--cash", type=float, default=10_000_000)
+    bt.add_argument("--k", type=float, default=0.5, help="변동성 돌파 계수")
+    bt.add_argument("--ma", type=int, default=5, help="추세 필터 이동평균 기간")
+    bt.set_defaults(func=_backtest)
+
+    pp = sub.add_parser("paper", help="페이퍼(모의) 실시간 루프 데모")
+    pp.add_argument("--start", default="20240101", help="데이터 시작 YYYYMMDD")
+    pp.add_argument("--end", default="20260625", help="데이터 종료 YYYYMMDD")
+    pp.add_argument("--ticks", type=int, default=20, help="라이브로 흘릴 최근 거래일 수")
+    pp.add_argument("--cash", type=float, default=10_000_000)
+    pp.add_argument("--k", type=float, default=0.5, help="변동성 돌파 계수")
+    pp.add_argument("--log", default="logs/khali_events.jsonl", help="이벤트 로그 파일 경로")
+    pp.set_defaults(func=_paper)
+
+    ro = sub.add_parser("rotation", help="횡단면 상대강도 로테이션 백테스트(실데이터)")
+    ro.add_argument("--start", default="20150101")
+    ro.add_argument("--end", default="20250101")
+    ro.add_argument("--cash", type=float, default=10_000_000)
+    ro.add_argument("--lookback", type=int, default=252, help="모멘텀 기간(일, 12개월≈252이 견고)")
+    ro.add_argument("--top-n", type=int, default=3, help="보유 종목 수")
+    ro.add_argument("--rebalance", type=int, default=20, help="리밸런스 주기(거래일)")
+    ro.add_argument("--regime", action="store_true", help="레짐 게이트(약세장 현금)")
+    ro.set_defaults(func=_rotation)
+
+    pl = sub.add_parser("plan", help="현실적 적립 계획표 — 결과를 '범위'로(실데이터)")
+    pl.add_argument("--initial", type=float, default=1_000_000)
+    pl.add_argument("--monthly", type=float, default=300_000, help="매월 적립액")
+    pl.add_argument("--years", type=int, default=5, help="투자 기간(년)")
+    pl.add_argument("--mode", choices=["bh", "hybrid"], default="bh")
+    pl.set_defaults(func=_plan)
+
+    dc = sub.add_parser("dca", help="적립식(매월 납입) 시뮬레이션(실데이터)")
+    dc.add_argument("--start", default="20150101")
+    dc.add_argument("--end", default="20250101")
+    dc.add_argument("--initial", type=float, default=1_000_000, help="초기 자본")
+    dc.add_argument("--monthly", type=float, default=500_000, help="매월 적립액")
+    dc.add_argument("--mode", choices=["bh", "hybrid"], default="bh")
+    dc.set_defaults(func=_dca)
+
+    hy = sub.add_parser("hybrid", help="B&H+레짐방어 하이브리드 백테스트(실데이터)")
+    hy.add_argument("--start", default="20150101")
+    hy.add_argument("--end", default="20250101")
+    hy.add_argument("--cash", type=float, default=10_000_000)
+    hy.add_argument("--ma", type=int, default=252, help="레짐 판정 이동평균(일)")
+    hy.set_defaults(func=_hybrid)
+
+    lv = sub.add_parser("live", help="KIS 모의/실거래 1회 실행 (.env 키 필요)")
+    lv.add_argument("--execute", action="store_true",
+                    help="실제 주문 제출 (기본은 dry-run, 주문 미제출)")
+    lv.add_argument("--allow-live", action="store_true",
+                    help="실전 계좌 주문 허용 (모의 검증 후에만!)")
+    lv.add_argument("--log", default="logs/khali_events.jsonl", help="이벤트 로그 파일 경로")
+    lv.set_defaults(func=_live)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
