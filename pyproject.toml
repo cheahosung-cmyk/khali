@@ -1,0 +1,6 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# 패키지 메타데이터/의존성은 setup.py 에 정의되어 있습니다.
+# 이 파일은 PEP 517/660(현대식 editable 설치)을 활성화하기 위한 것입니다.
