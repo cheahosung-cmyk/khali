@@ -1,6 +1,7 @@
 pandas>=2.0
 lxml>=4.9
-pykrx>=1.0.45
+requests>=2.31
+beautifulsoup4>=4.12
 finance-datareader>=0.9.90
 yfinance>=0.2.40
 anthropic>=0.40.0

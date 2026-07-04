@@ -40,8 +40,9 @@ def _load_universe() -> pd.DataFrame:
     except Exception:
         pass  # S&P500만으로 진행
     df = pd.concat(frames).drop_duplicates(subset="Symbol")
-    # yfinance 표기 통일 (BRK.B -> BRK-B)
+    # yfinance 표기 통일 (BRK.B -> BRK-B). FDR은 점을 뗀 표기(BRKB)로 주므로 별도 매핑
     df["Symbol"] = df["Symbol"].str.replace(".", "-", regex=False)
+    df["Symbol"] = df["Symbol"].replace({"BRKB": "BRK-B", "BFB": "BF-B"})
     return df.dropna(subset=["Symbol"])
 
 
