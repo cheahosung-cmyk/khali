@@ -101,48 +101,81 @@ def build_quant_section(kr: dict, us: dict) -> str:
     return "\n".join(parts)
 
 
-def claude_analysis(kr: dict, us: dict) -> str | None:
-    """Claude 전문가 패널 분석. 키가 없거나 실패하면 None."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return None
-    try:
-        import anthropic
+def _user_prompt(kr: dict, us: dict) -> str:
+    payload = {
+        "korea": {"data_date": kr.get("date"), "note": kr.get("note"),
+                  "candidates": kr.get("candidates", [])},
+        "us": {"data_date": us.get("date"), "note": us.get("note"),
+               "candidates": us.get("candidates", [])},
+    }
+    return (
+        "오늘의 스크리닝 후보 데이터입니다. 전문가 패널 토론을 거쳐 "
+        "지정된 출력 구조로 분석 리포트를 작성하세요.\n\n"
+        + json.dumps(payload, ensure_ascii=False)
+    )
 
-        payload = {
-            "korea": {"data_date": kr.get("date"), "note": kr.get("note"),
-                      "candidates": kr.get("candidates", [])},
-            "us": {"data_date": us.get("date"), "note": us.get("note"),
-                   "candidates": us.get("candidates", [])},
-        }
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model=config.CLAUDE_MODEL,
-            max_tokens=config.CLAUDE_MAX_TOKENS,
-            system=SYSTEM_PROMPT,
-            messages=[{
-                "role": "user",
-                "content": (
-                    "오늘의 스크리닝 후보 데이터입니다. 전문가 패널 토론을 거쳐 "
-                    "지정된 출력 구조로 분석 리포트를 작성하세요.\n\n"
-                    + json.dumps(payload, ensure_ascii=False)
-                ),
-            }],
-        )
-        return "".join(b.text for b in message.content if b.type == "text")
-    except Exception as err:  # noqa: BLE001 - 리포트 자체는 실패시키지 않는다
-        print(f"[warn] Claude 분석 실패, 퀀트-only 리포트로 폴백: {err}")
-        return None
+
+def gemini_analysis(kr: dict, us: dict, api_key: str) -> str:
+    """Gemini(무료 티어) 전문가 패널 분석."""
+    import requests
+
+    resp = requests.post(
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{config.GEMINI_MODEL}:generateContent",
+        headers={"x-goog-api-key": api_key},
+        json={
+            "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+            "contents": [{"role": "user",
+                          "parts": [{"text": _user_prompt(kr, us)}]}],
+            "generationConfig": {"maxOutputTokens": config.GEMINI_MAX_TOKENS},
+        },
+        timeout=300,
+    )
+    resp.raise_for_status()
+    parts = resp.json()["candidates"][0]["content"]["parts"]
+    text = "".join(p.get("text", "") for p in parts)
+    if not text.strip():
+        raise ValueError("Gemini 응답이 비어 있음(안전 필터 또는 토큰 한도)")
+    return text
+
+
+def claude_analysis(kr: dict, us: dict, api_key: str) -> str:
+    """Claude 전문가 패널 분석."""
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model=config.CLAUDE_MODEL,
+        max_tokens=config.CLAUDE_MAX_TOKENS,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": _user_prompt(kr, us)}],
+    )
+    return "".join(b.text for b in message.content if b.type == "text")
+
+
+def ai_analysis(kr: dict, us: dict) -> str | None:
+    """가용한 키 순서(Gemini → Claude)로 분석 시도. 모두 실패하면 None."""
+    providers = []
+    if os.environ.get("GEMINI_API_KEY"):
+        providers.append(("Gemini", gemini_analysis, os.environ["GEMINI_API_KEY"]))
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        providers.append(("Claude", claude_analysis, os.environ["ANTHROPIC_API_KEY"]))
+    for name, fn, key in providers:
+        try:
+            return fn(kr, us, key)
+        except Exception as err:  # noqa: BLE001 - 리포트 자체는 실패시키지 않는다
+            print(f"[warn] {name} 분석 실패: {err}")
+    return None
 
 
 def build_report(kr: dict, us: dict, report_date: str, dry_run: bool) -> str:
     parts = [f"# 일일 주식 분석 리포트 — {report_date}\n"]
-    analysis = None if dry_run else claude_analysis(kr, us)
+    analysis = None if dry_run else ai_analysis(kr, us)
     if dry_run:
-        parts.append("> [DRY RUN] Claude 분석 없이 퀀트 스크리닝 결과만 포함된 리포트입니다.\n")
+        parts.append("> [DRY RUN] AI 분석 없이 퀀트 스크리닝 결과만 포함된 리포트입니다.\n")
     elif analysis is None:
-        parts.append("> Claude 분석을 사용할 수 없어 퀀트 스크리닝 결과만 포함합니다. "
-                     "(ANTHROPIC_API_KEY 미설정 또는 API 오류)\n")
+        parts.append("> AI 분석을 사용할 수 없어 퀀트 스크리닝 결과만 포함합니다. "
+                     "(GEMINI_API_KEY/ANTHROPIC_API_KEY 미설정 또는 API 오류)\n")
     if analysis:
         parts.append(analysis + "\n")
     parts.append(build_quant_section(kr, us))

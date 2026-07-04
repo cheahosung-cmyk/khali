@@ -42,6 +42,7 @@ jobs:
         id: gen
         run: python -m stock_analyst.main ${{ inputs.dry_run == true && '--dry-run' || '' }}
         env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Commit report

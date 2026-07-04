@@ -1,8 +1,11 @@
 """파이프라인 튜닝값 모음. 점수 가중치·필터 임계값·유니버스·모델 설정을 전부 여기서 조정한다."""
 
 # ---------------------------------------------------------------------------
-# Claude 리포트
+# AI 분석 리포트 — GEMINI_API_KEY가 있으면 Gemini(무료 티어), 없으면
+# ANTHROPIC_API_KEY로 Claude, 둘 다 없으면 퀀트-only 폴백
 # ---------------------------------------------------------------------------
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MAX_TOKENS = 16384
 CLAUDE_MODEL = "claude-sonnet-5"  # 비용을 더 줄이려면 "claude-haiku-4-5-20251001"
 CLAUDE_MAX_TOKENS = 16000
 
