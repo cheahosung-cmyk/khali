@@ -1,0 +1,17 @@
+{
+ "date": "2026-07-04",
+ "candidates": [
+  {"market": "KR", "ticker": "002990", "name": "금호건설", "price": 9500, "composite_score": 82.3},
+  {"market": "KR", "ticker": "002380", "name": "KCC", "price": 489000, "composite_score": 82.3},
+  {"market": "KR", "ticker": "383220", "name": "F&F", "price": 79100, "composite_score": 81.5},
+  {"market": "KR", "ticker": "001450", "name": "현대해상", "price": 36700, "composite_score": 79.5},
+  {"market": "KR", "ticker": "003690", "name": "코리안리", "price": 13420, "composite_score": 78.1},
+  {"market": "KR", "ticker": "194370", "name": "제이에스코퍼레이션", "price": 12280, "composite_score": 78.0},
+  {"market": "US", "ticker": "TROW", "name": "T. Rowe Price", "price": 118.55, "composite_score": 78.9},
+  {"market": "US", "ticker": "ALL", "name": "Allstate", "price": 250.33, "composite_score": 78.8},
+  {"market": "US", "ticker": "CINF", "name": "Cincinnati Financial", "price": 192.03, "composite_score": 78.0},
+  {"market": "US", "ticker": "HST", "name": "Host Hotels & Resorts", "price": 23.35, "composite_score": 76.0},
+  {"market": "US", "ticker": "TRV", "name": "Travelers Companies (The)", "price": 342.31, "composite_score": 74.9},
+  {"market": "US", "ticker": "BBY", "name": "Best Buy", "price": 77.99, "composite_score": 74.8}
+ ]
+}
