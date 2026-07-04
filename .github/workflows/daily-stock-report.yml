@@ -46,16 +46,19 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Commit report
+        # 같은 날 재실행 시 이전 리포트 커밋과 충돌하지 않도록, 원격 최신 커밋 위에
+        # 방금 생성한 리포트를 얹는다(생성 산출물은 항상 최신 실행이 이긴다)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${{ github.ref_name }}"
+          git reset --soft FETCH_HEAD
           git add reports/
           if git diff --cached --quiet; then
             echo "변경 없음 — 커밋 생략"
             exit 0
           fi
           git commit -m "report: ${{ steps.gen.outputs.report_date }}"
-          git pull --rebase origin "${{ github.ref_name }}"
           git push origin "HEAD:${{ github.ref_name }}"
 
       - name: Create issue
