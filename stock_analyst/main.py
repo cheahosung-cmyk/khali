@@ -50,13 +50,40 @@ def main() -> None:
         us = _run_market("미국", us_screener.screen)
 
     report_date = datetime.now(KST).strftime("%Y-%m-%d")
-    markdown = build_report(kr, us, report_date, dry_run=args.dry_run)
+
+    # 사전 검증: 목표주가 컨센서스·최근 뉴스를 후보에 덧붙임(실패해도 계속)
+    try:
+        from . import verify
+        verify.enrich(kr, us)
+    except Exception:
+        traceback.print_exc()
+
+    # 성과 검증: 과거 추천의 실제 수익률 집계(실패해도 리포트는 계속)
+    history_dir = str(Path(args.out_dir) / "history")
+    tracking_md, track_summary = "", ""
+    try:
+        from . import tracking
+        tracking_md, track_summary = tracking.build_tracking_section(history_dir, report_date)
+        if track_summary:
+            print(f"[info] 성과 집계: {track_summary}")
+    except Exception:
+        traceback.print_exc()
+
+    markdown = build_report(kr, us, report_date, dry_run=args.dry_run,
+                            tracking_md=tracking_md, track_summary=track_summary)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{report_date}.md"
     out_path.write_text(markdown, encoding="utf-8")
     print(f"[info] 리포트 저장: {out_path}")
+
+    # 오늘의 추천을 검증용 기록으로 저장
+    try:
+        from . import tracking
+        tracking.save_snapshot(history_dir, report_date, kr, us)
+    except Exception:
+        traceback.print_exc()
 
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
