@@ -1,0 +1,64 @@
+# 평일 22:10 UTC(한국시간 다음날 07:10, 화~토)에 주식 분석 리포트를 생성해
+# reports/에 커밋하고 GitHub Issue로 게시한다. 미국장 마감(늦어도 21:00 UTC)
+# 이후라 그날의 한국장·미국장 마감 데이터를 모두 커버한다.
+name: Daily Stock Report
+
+on:
+  schedule:
+    - cron: "10 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Claude API 호출 없이 퀀트 리포트만 생성"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: daily-stock-report
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate report
+        id: gen
+        run: python -m stock_analyst.main ${{ inputs.dry_run == true && '--dry-run' || '' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Commit report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          if git diff --cached --quiet; then
+            echo "변경 없음 — 커밋 생략"
+            exit 0
+          fi
+          git commit -m "report: ${{ steps.gen.outputs.report_date }}"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin "HEAD:${{ github.ref_name }}"
+
+      - name: Create issue
+        run: >
+          gh issue create
+          --title "${{ steps.gen.outputs.report_title }}"
+          --body-file "${{ steps.gen.outputs.report_path }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
