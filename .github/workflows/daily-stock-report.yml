@@ -4,6 +4,9 @@
 name: Daily Stock Report
 
 on:
+  # 임시: API 키 등록 후 풀 파이프라인 검증용 — 검증 완료 후 제거 예정
+  push:
+    branches: ["claude/stock-analysis-ai-wsfb9j"]
   schedule:
     - cron: "10 22 * * 1-5"
   workflow_dispatch:
