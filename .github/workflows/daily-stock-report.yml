@@ -4,9 +4,6 @@
 name: Daily Stock Report
 
 on:
-  # 임시: 머지 전 검증용 — 검증 완료 후 제거 예정
-  push:
-    branches: ["claude/stock-analysis-ai-wsfb9j"]
   schedule:
     - cron: "10 22 * * 1-5"
   workflow_dispatch:
