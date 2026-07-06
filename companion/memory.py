@@ -10,7 +10,10 @@ EXTRACT_SYSTEM = (
     "기존 프로필과 이번 대화를 보고 갱신된 전체 프로필을 반환한다. "
     "이번 대화에서 새로 드러난 취향·관심사·기억할 사실을 추가하고, "
     "중복은 합치고, 대화에서 명백히 바뀐 내용은 수정한다. "
-    "각 항목은 한 문장 이내로 짧게 쓴다. 추측은 넣지 않는다."
+    "각 항목은 한 문장 이내로 짧게 쓴다. 추측은 넣지 않는다. "
+    '반환 형식은 {"좋아하는 것": [...], "싫어하는 것": [...], '
+    '"관심사": [...], "기억": [...]} 형태의 JSON 하나이며, '
+    "JSON 외에는 아무것도 출력하지 않는다."
 )
 
 EXTRACT_SCHEMA = {
@@ -93,7 +96,7 @@ def _normalize(profile: dict) -> dict:
     return out
 
 
-def update_profile(client, profile: dict, session_messages: list) -> dict:
+def update_profile(provider, profile: dict, session_messages: list) -> dict:
     """세션 대화에서 취향을 추출해 갱신된 프로필을 반환. 실패 시 기존 프로필 유지."""
     transcript = "\n".join(
         f"{'사용자' if m['role'] == 'user' else '그녀'}: {m['content']}"
@@ -106,19 +109,9 @@ def update_profile(client, profile: dict, session_messages: list) -> dict:
         f"{transcript}\n\n"
         "갱신된 전체 프로필을 반환해라."
     )
-    resp = client.messages.create(
-        model=config.CLAUDE_MODEL,
-        max_tokens=config.EXTRACT_MAX_TOKENS,
-        system=EXTRACT_SYSTEM,
-        messages=[{"role": "user", "content": prompt}],
-        output_config={
-            "format": {"type": "json_schema", "schema": EXTRACT_SCHEMA},
-            "effort": "low",
-        },
-    )
-    if resp.stop_reason != "end_turn":
+    text = provider.extract_json(EXTRACT_SYSTEM, prompt, EXTRACT_SCHEMA)
+    if not text:
         return profile
-    text = next((b.text for b in resp.content if b.type == "text"), "")
     try:
         return _normalize(json.loads(text))
     except json.JSONDecodeError:

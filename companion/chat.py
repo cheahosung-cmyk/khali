@@ -1,5 +1,5 @@
-"""페르소나 시스템 프롬프트 구성과 Claude 스트리밍 호출."""
-from . import config, memory
+"""페르소나 시스템 프롬프트 구성."""
+from . import memory
 
 
 def build_system(persona: dict, profile: dict) -> str:
@@ -26,21 +26,3 @@ def build_system(persona: dict, profile: dict) -> str:
     else:
         parts.append("아직 사용자에 대해 아는 것이 없다. 대화하면서 자연스럽게 알아간다.")
     return "\n\n".join(parts)
-
-
-def stream_reply(client, system: str, messages: list) -> tuple[str, str]:
-    """답변을 스트리밍 출력하고 (전체 텍스트, stop_reason)을 반환."""
-    with client.messages.stream(
-        model=config.CLAUDE_MODEL,
-        max_tokens=config.CHAT_MAX_TOKENS,
-        system=system,
-        messages=messages[-config.HISTORY_SEND:],
-        thinking={"type": "adaptive"},
-        output_config={"effort": config.CHAT_EFFORT},
-    ) as stream:
-        for text in stream.text_stream:
-            print(text, end="", flush=True)
-        final = stream.get_final_message()
-    print()
-    reply = "".join(b.text for b in final.content if b.type == "text")
-    return reply, final.stop_reason

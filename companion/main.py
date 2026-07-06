@@ -1,12 +1,13 @@
 """1:1 맞춤형 컴패니언 대화 CLI.
 
-사용법:
-    export ANTHROPIC_API_KEY=...
+사용법(무료):
+    export GEMINI_API_KEY=...   # https://aistudio.google.com 에서 무료 발급
     python -m companion.main
+자세한 백엔드 선택은 README 참고.
 """
 import sys
 
-from . import chat, config, memory
+from . import chat, config, memory, providers
 
 EXIT_WORDS = {"/bye", "/잘자", "exit", "quit", "종료"}
 
@@ -42,22 +43,22 @@ def show_profile(profile: dict):
     print(summary if summary else "아직 기억하고 있는 게 없어요. 대화하면서 채워집니다.")
 
 
-def finish_session(client, profile: dict, history: list, session_messages: list) -> dict:
+def finish_session(provider, profile: dict, history: list, session_messages: list) -> dict:
     """세션 대화에서 취향을 학습하고 기록을 저장."""
     memory.save_history(history)
     if len(session_messages) >= 2:
         print("(오늘 대화를 기억해 두는 중...)")
         try:
-            profile = memory.update_profile(client, profile, session_messages)
+            profile = memory.update_profile(provider, profile, session_messages)
             memory.save_profile(profile)
         except Exception as err:  # noqa: BLE001 - 학습 실패로 종료를 막지 않는다
             print(f"[warn] 취향 학습 실패: {err}")
     return profile
 
 
-def run(client, persona: dict, profile: dict, history: list):
+def run(provider, persona: dict, profile: dict, history: list):
     session_messages = []  # 이번 세션에서 오간 메시지(취향 학습용)
-    print(f"\n{persona['이름']}(와)과 대화를 시작합니다. 명령어는 /help\n")
+    print(f"\n{persona['이름']}(와)과 대화를 시작합니다. 백엔드: {provider.name}, 명령어: /help\n")
     try:
         while True:
             user = _input("나: ")
@@ -93,13 +94,13 @@ def run(client, persona: dict, profile: dict, history: list):
             print(f"{persona['이름']}: ", end="", flush=True)
             try:
                 system = chat.build_system(persona, profile)
-                reply, stop_reason = chat.stream_reply(client, system, history)
+                reply, refused = provider.chat(system, history[-config.HISTORY_SEND:])
             except Exception as err:  # noqa: BLE001
                 print(f"\n[warn] 응답 실패: {_friendly_error(err)}")
                 history.pop()  # 실패한 턴은 기록에서 제거
                 session_messages.pop()
                 continue
-            if stop_reason == "refusal":
+            if refused:
                 print(f"{persona['이름']}: 음… 그 얘기는 좀 그래. 다른 얘기 하자!")
                 history.pop()
                 session_messages.pop()
@@ -109,31 +110,39 @@ def run(client, persona: dict, profile: dict, history: list):
             memory.save_history(history)
     except KeyboardInterrupt:
         print()
-    profile = finish_session(client, profile, history, session_messages)
+    profile = finish_session(provider, profile, history, session_messages)
     print(f"{persona['이름']}: 잘 가! 또 얘기하자 :)")
 
 
 def _friendly_error(err) -> str:
-    import anthropic
+    import requests
 
     if isinstance(err, TypeError) and "authentication" in str(err).lower():
-        return "인증 정보가 없습니다. export ANTHROPIC_API_KEY=... 후 다시 실행하세요."
-    if isinstance(err, anthropic.AuthenticationError):
-        return "API 키가 올바르지 않습니다. ANTHROPIC_API_KEY를 확인하세요."
-    if isinstance(err, anthropic.RateLimitError):
-        return "요청이 너무 잦습니다. 잠시 후 다시 말을 걸어 보세요."
-    if isinstance(err, anthropic.APIConnectionError):
-        return "네트워크 연결에 실패했습니다."
-    if isinstance(err, anthropic.APIStatusError):
-        return f"API 오류({err.status_code}): {err.message}"
+        return "인증 정보가 없습니다. API 키 환경변수를 확인하세요."
+    try:
+        import anthropic
+        if isinstance(err, anthropic.AuthenticationError):
+            return "API 키가 올바르지 않습니다. ANTHROPIC_API_KEY를 확인하세요."
+        if isinstance(err, anthropic.RateLimitError):
+            return "요청이 너무 잦습니다. 잠시 후 다시 말을 걸어 보세요."
+        if isinstance(err, anthropic.APIConnectionError):
+            return "네트워크 연결에 실패했습니다."
+        if isinstance(err, anthropic.APIStatusError):
+            return f"API 오류({err.status_code}): {err.message}"
+    except ImportError:
+        pass
+    if isinstance(err, requests.HTTPError):
+        code = err.response.status_code if err.response is not None else "?"
+        if code == 429:
+            return "요청 한도에 걸렸습니다(무료 티어). 잠시 후 다시 말을 걸어 보세요."
+        return f"API 오류({code})"
+    if isinstance(err, requests.RequestException):
+        return "서버에 연결하지 못했습니다. 네트워크(또는 Ollama 실행 여부)를 확인하세요."
     return str(err)
 
 
 def main():
-    import anthropic
-
-    # 키는 ANTHROPIC_API_KEY 환경변수 등에서 자동 해석된다.
-    client = anthropic.Anthropic()
+    provider = providers.make_provider()
     try:
         persona = memory.load_persona() or setup_persona()
     except KeyboardInterrupt:
@@ -141,7 +150,7 @@ def main():
         return
     profile = memory.load_profile()
     history = memory.load_history()
-    run(client, persona, profile, history)
+    run(provider, persona, profile, history)
 
 
 if __name__ == "__main__":
