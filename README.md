@@ -30,6 +30,29 @@ python -m companion.main
 
 모델 변경: `GEMINI_MODEL`, `OLLAMA_MODEL`, `COMPANION_MODEL`(Claude) 환경변수.
 
+### 수위 제한 없이 쓰기 (성인용)
+
+Claude·Gemini 같은 API 모델의 콘텐츠 제한은 이 프로그램에서 바꿀 수 없다.
+수위 제한 없이 쓰려면 로컬 Ollama에 제한 완화(abliterated) 모델을 받아서 쓴다:
+
+```bash
+# 일반 PC (8GB RAM 이상)
+ollama pull richardyoung/qwythos-9b-abliterated
+export COMPANION_PROVIDER=ollama
+export OLLAMA_MODEL=richardyoung/qwythos-9b-abliterated
+python -m companion.main
+
+# 고사양 (16GB RAM 이상, 더 나은 대화 품질)
+ollama pull richardyoung/qwen3.6-27b-abliterated
+export OLLAMA_MODEL=richardyoung/qwen3.6-27b-abliterated
+```
+
+기본 모델인 `exaone3.5`는 한국어는 가장 자연스럽지만 안전 튜닝이 있어
+수위 높은 대화는 거절한다. 제한 완화 모델은 한국어가 그보다 어색할 수
+있으니 둘을 받아두고 대화 목적에 따라 `OLLAMA_MODEL`로 골라 쓰는 것도
+방법이다. 첫 실행 설정(또는 `persona.json`)의 "추가 설정"에 원하는
+관계·수위를 적으면 시스템 프롬프트에 그대로 반영된다.
+
 ### 명령어
 
 | 명령 | 동작 |
