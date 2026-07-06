@@ -1,0 +1,47 @@
+{
+ "date": "2026-07-07",
+ "candidates": [
+  {
+   "market": "US",
+   "ticker": "ALL",
+   "name": "Allstate",
+   "price": 248.37,
+   "composite_score": 79.4
+  },
+  {
+   "market": "US",
+   "ticker": "TROW",
+   "name": "T. Rowe Price",
+   "price": 119.12,
+   "composite_score": 79.0
+  },
+  {
+   "market": "US",
+   "ticker": "CINF",
+   "name": "Cincinnati Financial",
+   "price": 189.59,
+   "composite_score": 78.1
+  },
+  {
+   "market": "US",
+   "ticker": "PRU",
+   "name": "Prudential Financial",
+   "price": 114.28,
+   "composite_score": 77.6
+  },
+  {
+   "market": "US",
+   "ticker": "PGR",
+   "name": "Progressive Corporation",
+   "price": 231.67,
+   "composite_score": 75.8
+  },
+  {
+   "market": "US",
+   "ticker": "HST",
+   "name": "Host Hotels & Resorts",
+   "price": 23.25,
+   "composite_score": 75.4
+  }
+ ]
+}
