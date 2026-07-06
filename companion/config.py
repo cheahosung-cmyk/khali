@@ -8,6 +8,14 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")   # 무료 티
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "exaone3.5")          # 한국어 로컬 모델
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 
+# OpenAI 호환 API (OpenRouter·Groq·Mistral·LM Studio 등)
+# 기본값: OpenRouter의 무료·무검열 Venice 모델
+OPENAI_COMPAT_URL = os.environ.get("OPENAI_COMPAT_URL", "https://openrouter.ai/api/v1")
+OPENAI_COMPAT_MODEL = os.environ.get(
+    "OPENAI_COMPAT_MODEL",
+    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+)
+
 CHAT_MAX_TOKENS = 1024        # 대화 답변은 짧게
 EXTRACT_MAX_TOKENS = 2048     # 취향 추출용
 CHAT_EFFORT = "low"           # 대화는 응답 속도가 중요(Claude 전용)

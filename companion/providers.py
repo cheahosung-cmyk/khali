@@ -134,6 +134,67 @@ class GeminiProvider:
         return _strip_fence(self._text(data)) or None
 
 
+class OpenAICompatProvider:
+    """OpenAI 호환 API. 기본은 OpenRouter의 무료·무검열 Venice 모델.
+
+    키는 OPENROUTER_API_KEY 또는 OPENAI_COMPAT_API_KEY에서 읽는다.
+    OPENAI_COMPAT_URL/MODEL을 바꾸면 Groq·Mistral·LM Studio 등도 쓸 수 있다.
+    """
+
+    def __init__(self):
+        self.api_key = (os.environ.get("OPENROUTER_API_KEY")
+                        or os.environ.get("OPENAI_COMPAT_API_KEY"))
+        if not self.api_key:
+            raise SystemExit(
+                "OPENROUTER_API_KEY가 없습니다. https://openrouter.ai/keys 에서 무료 발급하세요."
+            )
+        self.url = config.OPENAI_COMPAT_URL.rstrip("/")
+        self.model = config.OPENAI_COMPAT_MODEL
+        self.name = f"OpenAI 호환({self.model})"
+
+    def _messages(self, system: str, messages: list) -> list:
+        return [{"role": "system", "content": system}, *messages]
+
+    def chat(self, system: str, messages: list) -> tuple[str, bool]:
+        resp = requests.post(f"{self.url}/chat/completions", json={
+            "model": self.model,
+            "messages": self._messages(system, messages),
+            "max_tokens": config.CHAT_MAX_TOKENS,
+            "stream": True,
+        }, headers={"Authorization": f"Bearer {self.api_key}"},
+            stream=True, timeout=300)
+        resp.raise_for_status()
+        parts, refused = [], False
+        for line in resp.iter_lines():
+            if not line or not line.startswith(b"data: "):
+                continue
+            payload = line[len(b"data: "):]
+            if payload == b"[DONE]":
+                break
+            chunk = json.loads(payload)
+            choice = (chunk.get("choices") or [{}])[0]
+            if choice.get("finish_reason") == "content_filter":
+                refused = True
+            piece = choice.get("delta", {}).get("content") or ""
+            if piece:
+                print(piece, end="", flush=True)
+                parts.append(piece)
+        print()
+        text = "".join(parts)
+        return text, refused or not text.strip()
+
+    def extract_json(self, system: str, prompt: str, schema: dict) -> str | None:
+        resp = requests.post(f"{self.url}/chat/completions", json={
+            "model": self.model,
+            "messages": self._messages(system, [{"role": "user", "content": prompt}]),
+            "max_tokens": config.EXTRACT_MAX_TOKENS,
+        }, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=300)
+        resp.raise_for_status()
+        choice = (resp.json().get("choices") or [{}])[0]
+        text = (choice.get("message") or {}).get("content") or ""
+        return _strip_fence(text) or None
+
+
 class OllamaProvider:
     """로컬 Ollama. 완전 무료·오프라인이지만 대화 품질은 API 모델보다 떨어진다."""
 
@@ -191,21 +252,29 @@ def make_provider():
         return AnthropicProvider()
     if choice == "gemini":
         return GeminiProvider()
+    if choice in ("openrouter", "openai"):
+        return OpenAICompatProvider()
     if choice == "ollama":
         return OllamaProvider()
     if choice:
-        raise SystemExit(f"알 수 없는 COMPANION_PROVIDER: {choice} (anthropic | gemini | ollama)")
+        raise SystemExit(
+            f"알 수 없는 COMPANION_PROVIDER: {choice} (anthropic | gemini | openrouter | ollama)"
+        )
     if os.environ.get("ANTHROPIC_API_KEY"):
         return AnthropicProvider()
     if os.environ.get("GEMINI_API_KEY"):
         return GeminiProvider()
+    if os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_COMPAT_API_KEY"):
+        return OpenAICompatProvider()
     ollama = OllamaProvider()
     if ollama.available():
         return ollama
     raise SystemExit(
-        "사용할 수 있는 대화 백엔드가 없습니다. 무료로 쓰려면 둘 중 하나를 준비하세요.\n"
-        "  1) Gemini 무료 API 키: https://aistudio.google.com 에서 발급 후\n"
+        "사용할 수 있는 대화 백엔드가 없습니다. 무료로 쓰려면 하나를 준비하세요.\n"
+        "  1) OpenRouter 무료 키(무검열 모델 포함): https://openrouter.ai/keys 발급 후\n"
+        "     export OPENROUTER_API_KEY=...\n"
+        "  2) Gemini 무료 API 키: https://aistudio.google.com 에서 발급 후\n"
         "     export GEMINI_API_KEY=...\n"
-        f"  2) 로컬 Ollama: https://ollama.com 설치 후  ollama pull {config.OLLAMA_MODEL}\n"
+        f"  3) 로컬 Ollama: https://ollama.com 설치 후  ollama pull {config.OLLAMA_MODEL}\n"
         "Claude API(유료)를 쓰려면 export ANTHROPIC_API_KEY=..."
     )

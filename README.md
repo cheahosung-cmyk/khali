@@ -19,21 +19,39 @@ python -m companion.main
 
 ### 백엔드 선택
 
-키가 있는 백엔드를 자동으로 고른다(Claude → Gemini → Ollama 순).
-`COMPANION_PROVIDER=anthropic|gemini|ollama`로 강제 지정할 수 있다.
+키가 있는 백엔드를 자동으로 고른다(Claude → Gemini → OpenRouter → Ollama 순).
+`COMPANION_PROVIDER=anthropic|gemini|openrouter|ollama`로 강제 지정할 수 있다.
 
 | 백엔드 | 비용 | 준비물 | 특징 |
 | --- | --- | --- | --- |
-| Gemini API | 무료 티어 | `GEMINI_API_KEY` | 무료 중 품질 최고. 분당 요청 한도 있음 |
-| Ollama(로컬) | 완전 무료 | [Ollama](https://ollama.com) 설치 후 `ollama pull exaone3.5` | 오프라인·제한 최소. 품질은 하드웨어와 모델에 좌우 |
+| Gemini API | 무료 티어 | `GEMINI_API_KEY` | 무료 중 품질 최고. 수위 제한 있음 |
+| OpenRouter | 무료 모델 있음 | `OPENROUTER_API_KEY` | 기본값이 무검열 Venice 24B 무료 모델(일 200요청). GPU 불필요 |
+| Ollama(로컬) | 완전 무료 | [Ollama](https://ollama.com) 설치 후 `ollama pull exaone3.5` | 오프라인·프라이버시 최고. 품질은 하드웨어와 모델에 좌우 |
 | Claude API | 유료 | `ANTHROPIC_API_KEY` | 대화 품질 최고 |
 
-모델 변경: `GEMINI_MODEL`, `OLLAMA_MODEL`, `COMPANION_MODEL`(Claude) 환경변수.
+모델 변경: `GEMINI_MODEL`, `OPENAI_COMPAT_MODEL`, `OLLAMA_MODEL`,
+`COMPANION_MODEL`(Claude) 환경변수. `OPENAI_COMPAT_URL`을 바꾸면
+Groq·Mistral·LM Studio 등 OpenAI 호환 API도 그대로 쓸 수 있다.
 
 ### 수위 제한 없이 쓰기 (성인용)
 
 Claude·Gemini 같은 API 모델의 콘텐츠 제한은 이 프로그램에서 바꿀 수 없다.
-수위 제한 없이 쓰려면 로컬 Ollama에 제한 완화(abliterated) 모델을 받아서 쓴다:
+수위 제한 없는 선택지는 두 가지다.
+
+**방법 1 — OpenRouter 무료 무검열 모델 (GPU 불필요, 가장 간단)**
+
+```bash
+# https://openrouter.ai/keys 에서 무료 키 발급
+export OPENROUTER_API_KEY=...
+export COMPANION_PROVIDER=openrouter
+python -m companion.main
+```
+
+기본 모델이 무검열 Venice(Dolphin Mistral 24B) 무료 엔드포인트다.
+하루 200요청 한도가 있고, 무료 엔드포인트 특성상 대화가 제공자 쪽에
+기록될 수 있다 — 사적인 대화의 프라이버시가 중요하면 방법 2를 쓴다.
+
+**방법 2 — 로컬 Ollama + 제한 완화 모델 (완전 오프라인)**
 
 ```bash
 # 일반 PC (8GB RAM 이상)
