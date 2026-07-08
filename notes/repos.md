@@ -6,5 +6,6 @@
 | --- | --- |
 | anthropics/claude-code | https://github.com/anthropics/claude-code.git |
 | modelcontextprotocol/servers | https://github.com/modelcontextprotocol/servers.git |
+| obra/superpowers | https://github.com/obra/superpowers.git |
 
 원본 붙여넣기에는 `modelcontextprotocol/servers` 링크가 네 번 반복돼 있었으나 같은 저장소라 한 줄로 정리했다.
