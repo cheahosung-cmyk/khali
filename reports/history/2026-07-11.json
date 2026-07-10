@@ -1,0 +1,89 @@
+{
+ "date": "2026-07-11",
+ "candidates": [
+  {
+   "market": "KR",
+   "ticker": "383220",
+   "name": "F&F",
+   "price": 77600,
+   "composite_score": 79.9
+  },
+  {
+   "market": "KR",
+   "ticker": "001450",
+   "name": "현대해상",
+   "price": 38150,
+   "composite_score": 78.5
+  },
+  {
+   "market": "KR",
+   "ticker": "453340",
+   "name": "현대그린푸드",
+   "price": 18840,
+   "composite_score": 78.2
+  },
+  {
+   "market": "KR",
+   "ticker": "002380",
+   "name": "KCC",
+   "price": 453500,
+   "composite_score": 77.4
+  },
+  {
+   "market": "KR",
+   "ticker": "003690",
+   "name": "코리안리",
+   "price": 13850,
+   "composite_score": 77.4
+  },
+  {
+   "market": "KR",
+   "ticker": "037710",
+   "name": "광주신세계",
+   "price": 49800,
+   "composite_score": 77.2
+  },
+  {
+   "market": "US",
+   "ticker": "ALL",
+   "name": "Allstate",
+   "price": 251.61,
+   "composite_score": 80.9
+  },
+  {
+   "market": "US",
+   "ticker": "TROW",
+   "name": "T. Rowe Price",
+   "price": 118.55,
+   "composite_score": 79.1
+  },
+  {
+   "market": "US",
+   "ticker": "PGR",
+   "name": "Progressive Corporation",
+   "price": 230.72,
+   "composite_score": 77.8
+  },
+  {
+   "market": "US",
+   "ticker": "PRU",
+   "name": "Prudential Financial",
+   "price": 115.37,
+   "composite_score": 76.7
+  },
+  {
+   "market": "US",
+   "ticker": "TRV",
+   "name": "Travelers Companies (The)",
+   "price": 338.92,
+   "composite_score": 75.9
+  },
+  {
+   "market": "US",
+   "ticker": "BBY",
+   "name": "Best Buy",
+   "price": 82.8,
+   "composite_score": 75.0
+  }
+ ]
+}
