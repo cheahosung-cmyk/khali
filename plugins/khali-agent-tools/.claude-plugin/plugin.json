@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "khali-agent-tools",
+  "description": "Scaffolding, review, and architecture helpers for building Khali agents.",
+  "version": "0.1.0",
+  "author": {
+    "name": "cheahosung-cmyk",
+    "email": "cheahosung@gmail.com"
+  },
+  "homepage": "https://github.com/cheahosung-cmyk/khali",
+  "repository": "https://github.com/cheahosung-cmyk/khali",
+  "license": "MIT",
+  "keywords": ["agents", "scaffolding", "code-review", "khali"]
+}
