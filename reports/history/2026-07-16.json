@@ -1,0 +1,47 @@
+{
+ "date": "2026-07-16",
+ "candidates": [
+  {
+   "market": "US",
+   "ticker": "ALL",
+   "name": "Allstate",
+   "price": 239.48,
+   "composite_score": 80.7
+  },
+  {
+   "market": "US",
+   "ticker": "TROW",
+   "name": "T. Rowe Price",
+   "price": 118.58,
+   "composite_score": 80.4
+  },
+  {
+   "market": "US",
+   "ticker": "EIX",
+   "name": "Edison International",
+   "price": 76.68,
+   "composite_score": 78.8
+  },
+  {
+   "market": "US",
+   "ticker": "PRU",
+   "name": "Prudential Financial",
+   "price": 115.04,
+   "composite_score": 77.2
+  },
+  {
+   "market": "US",
+   "ticker": "TRV",
+   "name": "Travelers Companies (The)",
+   "price": 329.19,
+   "composite_score": 76.0
+  },
+  {
+   "market": "US",
+   "ticker": "BBY",
+   "name": "Best Buy",
+   "price": 85.37,
+   "composite_score": 75.0
+  }
+ ]
+}
