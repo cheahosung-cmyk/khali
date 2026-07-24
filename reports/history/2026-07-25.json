@@ -1,0 +1,89 @@
+{
+ "date": "2026-07-25",
+ "candidates": [
+  {
+   "market": "KR",
+   "ticker": "002990",
+   "name": "금호건설",
+   "price": 10150,
+   "composite_score": 81.1
+  },
+  {
+   "market": "KR",
+   "ticker": "001450",
+   "name": "현대해상",
+   "price": 40350,
+   "composite_score": 79.1
+  },
+  {
+   "market": "KR",
+   "ticker": "005830",
+   "name": "DB손해보험",
+   "price": 167900,
+   "composite_score": 78.5
+  },
+  {
+   "market": "KR",
+   "ticker": "383220",
+   "name": "F&F",
+   "price": 76100,
+   "composite_score": 78.2
+  },
+  {
+   "market": "KR",
+   "ticker": "002810",
+   "name": "삼영무역",
+   "price": 22900,
+   "composite_score": 78.2
+  },
+  {
+   "market": "KR",
+   "ticker": "111770",
+   "name": "영원무역",
+   "price": 87700,
+   "composite_score": 76.9
+  },
+  {
+   "market": "US",
+   "ticker": "ALL",
+   "name": "Allstate",
+   "price": 259.97,
+   "composite_score": 83.0
+  },
+  {
+   "market": "US",
+   "ticker": "EIX",
+   "name": "Edison International",
+   "price": 79.75,
+   "composite_score": 81.6
+  },
+  {
+   "market": "US",
+   "ticker": "TRV",
+   "name": "Travelers Companies (The)",
+   "price": 387.26,
+   "composite_score": 79.7
+  },
+  {
+   "market": "US",
+   "ticker": "TROW",
+   "name": "T. Rowe Price",
+   "price": 116.5,
+   "composite_score": 78.5
+  },
+  {
+   "market": "US",
+   "ticker": "CINF",
+   "name": "Cincinnati Financial",
+   "price": 182.81,
+   "composite_score": 76.8
+  },
+  {
+   "market": "US",
+   "ticker": "PRU",
+   "name": "Prudential Financial",
+   "price": 119.96,
+   "composite_score": 76.7
+  }
+ ]
+}
