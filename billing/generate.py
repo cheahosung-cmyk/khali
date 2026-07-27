@@ -53,12 +53,14 @@ def calculate(building, inputs, ledger, month):
     납부 = inputs.get("이번달_납부액", {})
     전월미납 = ledger.get(prev_month(month), {})
 
-    지분평수합 = sum(s.get("지분평수", s["분양평수"]) for s in building["세대"])
+    # '퇴거': 'YYYY-MM'이 있는 세대는 그 달부터 부과에서 빠진다 (문자열 비교로 충분)
+    재실 = [s for s in building["세대"] if not s.get("퇴거") or month < s["퇴거"]]
+    지분평수합 = sum(s.get("지분평수", s["분양평수"]) for s in 재실)
     수도단가 = 수도["납기요금"] / 수도["전체사용량_t"] if 수도["전체사용량_t"] else 0
     전기총액 = 전기["기본요금"] + 전기["전기요금"] + 전기["전력기금"]
 
     rows = []
-    for s in building["세대"]:
+    for s in 재실:
         이름, 평수 = s["이름"], s["분양평수"]
         지분 = s.get("지분평수", 평수) / 지분평수합
         세대수도 = round(수도단가 * 사용량.get(이름, 0))
@@ -84,13 +86,16 @@ def calculate(building, inputs, ledger, month):
         r["납부액"] = 납부.get(r["이름"], 0)
         r["기말미납"] = r["미납액"] + r["당월부과액"] - r["납부액"]
 
-    # 퇴거 세대는 부과 없이 미수금 잔액만 이월한다
+    # 퇴거한 세대는 부과 없이 미수금 잔액만 이월한다
     퇴거 = []
-    for s in building.get("퇴거세대", []):
-        잔액 = 전월미납.get(s["이름"], 0)
-        낸돈 = 납부.get(s["이름"], 0)
-        퇴거.append({"이름": s["이름"], "미납액": 잔액, "납부액": 낸돈,
-                     "기말미납": 잔액 - 낸돈, "비고": s.get("비고", "")})
+    for s in building["세대"]:
+        if s.get("퇴거") and month >= s["퇴거"]:
+            잔액 = 전월미납.get(s["이름"], 0)
+            낸돈 = 납부.get(s["이름"], 0)
+            if 잔액 or 낸돈:
+                퇴거.append({"이름": s["이름"], "미납액": 잔액, "납부액": 낸돈,
+                             "기말미납": 잔액 - 낸돈,
+                             "비고": f"퇴거({s['퇴거']}) 미수금 추적, 부과 없음"})
 
     meta = {"지분평수합": 지분평수합, "수도단가": 수도단가, "공용수도": 공용수도,
             "전기총액": 전기총액, "전월미납": 전월미납}
@@ -206,8 +211,7 @@ def make_xlsx(rows, 퇴거, meta, inputs, building, month, outdir):
                     r["납부액"], r["기말미납"], ""])
         style_row(ws2, ws2.max_row, 7)
     for t in 퇴거:
-        ws2.append([t["이름"], t["미납액"], round(t["미납액"] * building["단가"]["연체료율"]),
-                    0, t["납부액"], t["기말미납"], t["비고"]])
+        ws2.append([t["이름"], t["미납액"], 0, 0, t["납부액"], t["기말미납"], t["비고"]])
         style_row(ws2, ws2.max_row, 7)
     전체 = rows + 퇴거
     ws2.append(["합 계", sum(x["미납액"] for x in 전체), "",
