@@ -85,6 +85,20 @@
   #linkscard .addrow button{background:var(--mint); color:#10241d; border:0; border-radius:7px;
     padding:0 12px; font-size:12px; font-weight:700; cursor:pointer;}
   #links{max-height:104px; overflow-y:auto;}
+  #cotitle{font-size:12px; color:var(--dim); margin-bottom:4px; letter-spacing:.5px;}
+  #setup h3{font-size:12px; color:var(--dim); display:flex; justify-content:space-between; cursor:pointer; letter-spacing:.5px;}
+  #setup h3 span{color:var(--mint); font-weight:400;}
+  #setup .sec-label{font-size:11px; color:var(--dim); margin:8px 0 5px;}
+  #setup .addrow{display:flex; gap:5px; margin-top:2px;}
+  #setup .addrow input{flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:7px;
+    color:var(--text); padding:6px 8px; font-size:12px; outline:none; min-width:0;}
+  #setup .addrow input:focus{border-color:var(--mint);}
+  #setup .addrow button{background:var(--mint); color:#10241d; border:0; border-radius:7px;
+    padding:0 12px; font-size:12px; font-weight:700; cursor:pointer;}
+  #setup .addrow button.ghost{flex:1; background:var(--panel2); border:1px solid var(--line);
+    color:var(--text); font-weight:400; padding:6px 0;}
+  #setup .addrow button.ghost:hover{border-color:var(--mint);}
+  #deptlist{max-height:104px; overflow-y:auto;}
   .lbtn{background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:6px;
     padding:2px 8px; font-size:11px; cursor:pointer; flex-shrink:0;}
   .lbtn:hover{border-color:var(--mint);}
@@ -117,6 +131,7 @@
   </div>
   <aside id="side">
     <div class="card" id="hud">
+      <div id="cotitle">나의 AI 회사</div>
       <div class="row">
         <div id="clock">07:00</div>
         <div id="speed">
@@ -131,6 +146,20 @@
         <span><i style="background:var(--pink)"></i>승인 대기</span>
         <span><i style="background:var(--lavender)"></i>연동 대기</span>
         <span><i style="background:var(--white)"></i>대기</span>
+      </div>
+    </div>
+
+    <div class="card" id="setup">
+      <h3 id="setup-head">회사 설정 <span id="setup-toggle">접기</span></h3>
+      <div id="setup-body">
+        <div class="addrow"><input id="cname" placeholder="회사 이름"><button id="cname-save">저장</button></div>
+        <div class="sec-label">부서 (최대 12개 · 부서당 3명)</div>
+        <div id="deptlist"></div>
+        <div class="addrow"><input id="dept-in" placeholder="부서 추가 — 예: 기획팀"><button id="dept-add">추가</button></div>
+        <div class="addrow" style="margin-top:6px">
+          <button id="load-preset" class="ghost">예시 회사 불러오기</button>
+          <button id="reset-all" class="ghost">전체 초기화</button>
+        </div>
       </div>
     </div>
 
@@ -210,7 +239,10 @@ function buildRoom(x0,y0,x1,y1,doors,tint){
   doors.forEach(([dx,dy])=>{ grid[dy][dx]=FLOOR; });
 }
 
-const DEPTS=[
+/* ===== 회사 정의 — 대표가 직접 세팅한다 (기본은 빈 회사) ===== */
+const PALETTE=['#39536b','#3f4b6e','#54446b','#6b3f52','#6b5a3f','#3f6b4a','#436b3f','#6b613f','#3f5c6b','#5c3f6b','#6b483f','#40606b'];
+const SECRETARY={n:'김세리',code:'김비서',role:'실장',duty:'전사 브리핑·지시창',tic:'결론부터 말씀드릴게요.'};
+const PRESET_DEPTS=[
  {name:'시장조사팀',short:'시장조사',keys:['시장','조사'],color:'#39536b',members:[
    {n:'한지원',code:'한조사',role:'팀장',duty:'출처 검증·최종 판단',tic:'출처 먼저 볼게요.'},
    {n:'문태호',code:'문뉴스',role:'팀원',duty:'AI 뉴스 수집',tic:'오늘자 뉴스 긁어왔어요.'},
@@ -256,42 +288,50 @@ const DEPTS=[
    {n:'김세리',code:'김비서',role:'실장',duty:'전사 브리핑',tic:'결론부터 말씀드릴게요.'},
    {n:'안도경',code:'안취합',role:'팀원',duty:'보고 취합',tic:'보고서 취합 중이에요.'}]},
 ];
+const LINK_PRESETS=[
+  {key:'insta', name:'인스타그램 계정 지표', who:'임채린'},
+  {key:'mail',  name:'협업 문의 메일함',    who:'배다인'},
+  {key:'auto',  name:'외부 자동화(업로드 봇 등)', who:'국태양'},
+];
+let company=store.get('company', null) || { name:'나의 AI 회사', depts:[] };
+const saveCompany=()=>store.set('company',company);
+function normalizeDepts(){
+  company.depts.forEach((d,i)=>{
+    if(!d.color) d.color=PALETTE[i%12];
+    if(!d.short) d.short=d.name.replace(/\s/g,'').slice(0,5);
+    if(!d.keys) d.keys=[d.name.replace('팀','')];
+    if(!d.members) d.members=[];
+  });
+}
+normalizeDepts();
 
-/* ===== 인사 기록(채용·해고) — 방 생성 전에 명단에 반영 ===== */
-const HR={ fired:store.get('fired',[]), hired:store.get('hired',[]) };
-HR.hired.forEach(h=>{
-  const d=DEPTS.find(x=>x.short===h.dept)||DEPTS.find(x=>x.name===h.dept);
-  if(d && d.members.length<3 && !d.members.some(m=>m.n===h.n))
-    d.members.push({n:h.n, code:h.n, role:'팀원', duty:h.duty||'지원 업무', tic:'맡겨주세요!'});
-});
-DEPTS.forEach(d=>{ d.members=d.members.filter(m=>!HR.fired.includes(m.n)); });
-
-// 부서 방: 위 6개 (y0..6, 문 아래), 아래 6개 (y20..26, 문 위)
-const rooms=[];
-for(let i=0;i<12;i++){
-  const top = i<6;
-  const rx=(i%6)*7, ry= top?0:20;
-  const door= top?[rx+3,6]:[rx+3,20];
-  buildRoom(rx,ry,rx+6,ry+6,[door],DEPTS[i].color);
-  const desks=[[rx+2,ry+2],[rx+4,ry+2],[rx+2,ry+4]];
-  const seats=[[rx+2,ry+3],[rx+4,ry+3],[rx+3,ry+4]];
-  desks.slice(0,DEPTS[i].members.length).forEach(([x,y])=>grid[y][x]=FURN);
-  rooms.push({dept:DEPTS[i], rx, ry, door, seats, labelY: top?ry+1:ry+5});
+let rooms=[];
+function buildWorld(){
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){ grid[y][x]=FLOOR; roomTint[y][x]=null; }
+  rooms=[];
+  company.depts.slice(0,12).forEach((dept,i)=>{
+    const top=i<6, rx=(i%6)*7, ry= top?0:20;
+    const door= top?[rx+3,6]:[rx+3,20];
+    buildRoom(rx,ry,rx+6,ry+6,[door],dept.color);
+    const desks=[[rx+2,ry+2],[rx+4,ry+2],[rx+2,ry+4]];
+    const seats=[[rx+2,ry+3],[rx+4,ry+3],[rx+3,ry+4]];
+    desks.slice(0,Math.min(3,dept.members.length)).forEach(([x,y])=>grid[y][x]=FURN);
+    rooms.push({dept, rx, ry, door, seats, labelY: top?ry+1:ry+5});
+  });
+  // 공용 공간 (프레임 고정: 회의실 · 대표실 · 라운지)
+  buildRoom(1,9,12,17,[[6,9],[6,17]],'#2e3b52');
+  rect(4,12,8,14,(x,y)=>grid[y][x]=FURN); // 회의 테이블
+  buildRoom(15,9,26,17,[[20,9],[20,17]],'#33424f');
+  rect(19,12,21,12,(x,y)=>grid[y][x]=FURN); // 대표 책상
+  grid[15][17]=FURN; // 비서 데스크
+  buildRoom(29,9,40,17,[[34,9],[34,17]],'#3d4438');
+  rect(37,10,39,10,(x,y)=>grid[y][x]=FURN); // 커피 카운터
+  rect(32,12,33,13,(x,y)=>grid[y][x]=FURN); // 라운지 테이블
 }
 
-// 회의실 / 대표실 / 라운지
-buildRoom(1,9,12,17,[[6,9],[6,17]],'#2e3b52');
-rect(4,12,8,14,(x,y)=>grid[y][x]=FURN); // 회의 테이블
 const MEET_SEATS=[[4,11],[5,11],[6,11],[7,11],[8,11],[4,15],[5,15],[6,15],[7,15],[8,15],[3,12],[3,14],[9,12],[9,13],[9,14]];
 const CEO_MEET_SEAT=[3,13];
-
-buildRoom(15,9,26,17,[[20,9],[20,17]],'#33424f');
-rect(19,12,21,12,(x,y)=>grid[y][x]=FURN); // 대표 책상
-const CEO_SEAT=[20,13], CEO_VISIT=[20,15];
-
-buildRoom(29,9,40,17,[[34,9],[34,17]],'#3d4438');
-rect(37,10,39,10,(x,y)=>grid[y][x]=FURN); // 커피 카운터
-rect(32,12,33,13,(x,y)=>grid[y][x]=FURN); // 라운지 테이블
+const CEO_SEAT=[20,13], CEO_VISIT=[20,15], SEC_SEAT=[17,14];
 const COFFEE_SPOTS=[[37,11],[38,11],[39,11],[31,12],[31,13],[34,12],[34,13]];
 
 const ENTRANCE=[0,13];
@@ -327,7 +367,7 @@ function astar(sx,sy,tx,ty,extra){
 }
 
 /* ================= 직원 ================= */
-const emps=[];
+let emps=[];
 class Emp{
   constructor(d, dept, seat, isCEO){
     this.name=d.n; this.code=d.code; this.role=d.role; this.duty=d.duty; this.tic=d.tic;
@@ -385,27 +425,39 @@ class Emp{
   say(text,ms){ this.bubble={text, until:performance.now()+(ms||2400)/SPEED}; }
 }
 
-rooms.forEach((room,i)=>{
-  room.dept.members.forEach((m,j)=>{
-    const e=new Emp(m, room.dept, room.seats[j]); emps.push(e);
+let CEO=null, SEC=null;
+const byName=n=>emps.find(e=>e.name===n && !e.fired);
+function spawnStaff(snap){
+  emps=[];
+  rooms.forEach(room=>{
+    room.dept.members.slice(0,3).forEach((m,j)=>{ emps.push(new Emp(m, room.dept, room.seats[j])); });
   });
-});
-const CEO=new Emp({n:'대표(나)',code:'대표',role:'대표',duty:'최종 결정',tic:''}, {name:'대표실',short:'대표실',keys:[]}, CEO_SEAT, true);
-emps.push(CEO);
-const SEC=emps.find(e=>e.name==='김세리');
-const byName=n=>emps.find(e=>e.name===n);
+  CEO=new Emp({n:'대표(나)',code:'대표',role:'대표',duty:'최종 결정',tic:''}, {name:'대표실',short:'대표실',keys:[]}, CEO_SEAT, true);
+  emps.push(CEO);
+  SEC=emps.find(e=>e.name==='김세리');
+  if(!SEC){
+    SEC=new Emp(SECRETARY, {name:'비서실',short:'비서실',keys:['비서'],color:'#40606b'}, SEC_SEAT);
+    emps.push(SEC);
+  }
+  if(snap) emps.forEach(e=>{
+    e.spawned=true; e.x=e.home[0]; e.y=e.home[1];
+    e.px=e.x*TILE+TILE/2; e.py=e.y*TILE+TILE/2;
+  });
+}
+function rebuildCompany(){
+  normalizeDepts(); saveCompany();
+  buildWorld(); spawnStaff(true);
+  refreshWhoSelect(); renderDepts(); renderLinks();
+  document.getElementById('cotitle').textContent=company.name;
+  document.title=company.name+' — AI 오피스';
+}
+buildWorld(); spawnStaff(false);
 
 /* ================= 시뮬레이션 시계·진행 상태 ================= */
 let simMin=0; // 07:00 기준 경과(분) — 24시간 무중단으로 계속 흐른다
 let focusMode=false;
 /* ===== 연동 관리 — 대표가 직접 켜고 끄는 칸 ===== */
-const LINK_DEFS=[
-  {key:'insta', name:'인스타그램 계정 지표', who:'임채린'},
-  {key:'mail',  name:'협업 문의 메일함',    who:'배다인'},
-  {key:'auto',  name:'외부 자동화(업로드 봇 등)', who:'국태양'},
-];
 const links=store.get('links', {});
-LINK_DEFS.forEach(l=>{ if(!links[l.key]) links[l.key]={on:false, note:'', name:l.name, who:l.who}; });
 const saveLinks=()=>store.set('links',links);
 function offLinks(){ return Object.values(links).filter(l=>!l.on); }
 function applyLinkStates(){
@@ -520,7 +572,7 @@ async function wanderLoop(){
 }
 
 /* ================= 목표·업무 보드 (대표가 직접 수정) ================= */
-let goals=store.get('goals', ['릴스 1건·캐러셀 1건 완성','아이디어 7건 이상 QA 통과']);
+let goals=store.get('goals', []);
 let tasks=store.get('tasks', []).map(t=> t.status==='진행 중'? Object.assign({},t,{status:'대기'}) : t);
 let taskSeq=tasks.reduce((m,t)=>Math.max(m,t.id||0),0)+1;
 const saveBoard=()=>{ store.set('goals',goals); store.set('tasks',tasks); };
@@ -639,9 +691,12 @@ function answerWhySlow(){
   chatEmp(SEC,'지연 없습니다. 지시된 업무도 없으니 시킬 일을 주세요.');
 }
 async function summonMeeting(){
+  if(!rooms.some(r=>r.dept.members.length)){
+    chatEmp(SEC,'소집할 팀장이 아직 없어요. 부서를 만들고 채용부터 해주세요.'); return;
+  }
   chatEmp(SEC,'회의 소집 방송했어요. 팀장 전원 회의실로 모입니다.');
   log('대표 지시: <b>회의 소집</b>');
-  const leaders=rooms.map(r=>byName(r.dept.members[0].n)).filter(e=>!e.inMeeting);
+  const leaders=rooms.filter(r=>r.dept.members.length).map(r=>byName(r.dept.members[0].n)).filter(e=>e&&!e.inMeeting);
   leaders.forEach(e=>{ e.summoned=true; });
   await Promise.all(leaders.map((e,i)=>{ const s=MEET_SEATS[i%MEET_SEATS.length]; return e.walkTo(s[0],s[1]); }));
   for(const e of leaders){
@@ -666,18 +721,17 @@ function toggleFocus(){
   }
 }
 // 목표 내용으로 맡을 부서를 고른다
-function pickDeptForGoal(goal){
-  const rules=[
-    [/아이디어|기획|상품|설계|콘텐츠|소재/, 2, '아이디어·기획 목표라 저희 전략 1팀이 잡는 게 맞아요.'],
-    [/릴스|영상|편집|촬영/, 5, '영상 목표라 릴스 제작팀이 맡을게요.'],
-    [/캐러셀|카드뉴스|디자인/, 6, '캐러셀 목표라 저희가 맡을게요.'],
-    [/협업|제휴|파트너|광고/, 7, '협업 목표라 파트너십에서 맡을게요.'],
-    [/수익|매출|정산|재무|만원|투자/, 8, '돈이 걸린 목표라 재무에서 현황부터 정리할게요.'],
-    [/지표|데이터|분석|페르소나/, 1, '데이터 목표라 인텔리전스팀이 맡을게요.'],
-    [/자동화|연동|봇/, 10, '자동화 목표라 저희가 맡을게요.'],
-  ];
-  for(const [re,idx,reason] of rules) if(re.test(goal)) return {dept:rooms[idx].dept, reason};
-  return {dept:rooms[2].dept, reason:'기획성 목표라 전략 1팀이 먼저 잡을게요.'};
+function pickDeptForGoal(text){
+  const cands=rooms.filter(r=>r.dept.members.length);
+  if(!cands.length) return null;
+  let best=cands[0], score=-1;
+  for(const r of cands){
+    const words=[r.dept.name,...(r.dept.keys||[]),...r.dept.members.map(m=>m.duty||'')].join(' ');
+    let sc=0;
+    for(const tk of words.split(/[\s·,]+/)) if(tk.length>=2 && text.includes(tk.replace('팀',''))) sc++;
+    if(sc>score){ score=sc; best=r; }
+  }
+  return {dept:best.dept, reason: score>0? `내용상 ${best.dept.name} 소관이라 여기서 맡을게요.` : `${best.dept.name}이 제일 가까워서 맡을게요.`};
 }
 function focusOnGoal(){
   if(!goals.length){
@@ -691,6 +745,7 @@ function focusOnGoal(){
     return;
   }
   const pick=pickDeptForGoal(goal);
+  if(!pick){ chatEmp(SEC,'목표는 알겠는데 맡길 직원이 아직 없어요. 회사 설정에서 부서를 만들고 채용부터 해주세요.'); return; }
   const lead=byName(pick.dept.members[0].n);
   chatEmp(SEC, `오늘의 목표 "${goal}" 전 부서에 전파했어요. 나머지 분석은 목표에 필요한 것만 남기고, 실행은 ${pick.dept.name}에 맡길게요.`);
   emps.forEach((e,i)=>{ if(!e.isCEO) setTimeout(()=>e.say('목표 확인했어요!',2200), (i%8)*260); });
@@ -698,6 +753,63 @@ function focusOnGoal(){
   addTask(lead.name, `[오늘의 목표] ${goal}`);
   chatEmp(lead, pick.reason);
 }
+/* ===== 회사 설정: 부서·프리셋·초기화 ===== */
+function renderDepts(){
+  const box=document.getElementById('deptlist'); if(!box) return;
+  box.innerHTML='';
+  if(!company.depts.length){
+    const d=document.createElement('div');
+    d.style.cssText='font-size:11px;color:var(--dim);margin-bottom:4px;';
+    d.textContent='부서가 없어요. 아래에서 만들거나 예시를 불러오세요.';
+    box.appendChild(d);
+  }
+  company.depts.forEach(dept=>{
+    const row=document.createElement('div'); row.className='brow';
+    const dot=document.createElement('i');
+    dot.style.cssText='width:9px;height:9px;border-radius:3px;flex-shrink:0;background:'+dept.color;
+    const t=document.createElement('span'); t.className='txt';
+    t.textContent=`${dept.name} (${dept.members.length}/3명)`;
+    const del=document.createElement('button'); del.className='del'; del.textContent='✕'; del.title='부서 삭제';
+    del.onclick=()=>removeDept(dept);
+    row.append(dot,t,del); box.appendChild(row);
+  });
+}
+function addDept(name){
+  name=(name||'').trim();
+  if(!name){ chatEmp(SEC,'부서 이름을 알려주세요. 예: "부서 추가: 기획팀"'); return; }
+  if(company.depts.length>=12){ chatEmp(SEC,'사무실 자리가 12개뿐이라 부서는 최대 12개예요.'); return; }
+  if(company.depts.some(d=>d.name===name)){ chatEmp(SEC,`"${name}" 부서가 이미 있어요.`); return; }
+  company.depts.push({name, members:[]});
+  rebuildCompany();
+  chatEmp(SEC,`"${name}" 부서를 만들었어요. "채용: ${name}, 이름, 역할"로 직원을 뽑아주세요.`);
+  log(`부서 신설: <b>${name}</b>`);
+}
+function removeDept(dept){
+  company.depts=company.depts.filter(d=>d!==dept);
+  rebuildCompany();
+  chatEmp(SEC,`"${dept.name}" 부서를 정리했어요. 소속 직원 ${dept.members.length}명도 함께 퇴사 처리됐어요.`);
+  log(`부서 폐지: ${dept.name}`);
+}
+function loadPreset(){
+  company={ name:'갓생컴퍼니(예시)', depts:JSON.parse(JSON.stringify(PRESET_DEPTS)) };
+  LINK_PRESETS.forEach(l=>{ if(!links[l.key]) links[l.key]={on:false, note:'', name:l.name, who:l.who}; });
+  saveLinks(); rebuildCompany();
+  document.getElementById('cname').value=company.name;
+  chatEmp(SEC,'예시 회사(갓생컴퍼니 12부서 32명)를 불러왔어요. 이건 참고용이에요 — 마음대로 해고·채용하고 부서를 갈아치우세요.');
+  log('<b>예시 회사 불러옴</b>');
+}
+let resetArmed=false;
+function resetAll(){
+  const b=document.getElementById('reset-all');
+  if(!resetArmed){
+    resetArmed=true; b.textContent='정말 초기화할까요?';
+    setTimeout(()=>{ resetArmed=false; b.textContent='전체 초기화'; },4000);
+    return;
+  }
+  ['company','goals','tasks','links','fired','hired','mode'].forEach(k=>{ try{ localStorage.removeItem('godsaeng.'+k); }catch(e){} });
+  location.reload();
+}
+
 /* ===== 채용·해고 ===== */
 function hireEmp(room, name, duty){
   const d=room.dept;
@@ -705,28 +817,22 @@ function hireEmp(room, name, duty){
   const used=emps.filter(x=>x.dept===d).map(x=>x.home.join(','));
   const si=[0,1,2].find(i=>!used.includes(room.seats[i].join(',')));
   if(si===undefined){ chatEmp(SEC,`${d.name}은 자리가 꽉 찼어요(방당 최대 3명). 먼저 한 명을 내보내야 채용할 수 있어요.`); return; }
-  const m={n:name, code:name, role:'팀원', duty:duty||'지원 업무', tic:'맡겨주세요!'};
+  const m={n:name, code:name, role:(d.members.length===0?'팀장':'팀원'), duty:duty||'지원 업무', tic:'맡겨주세요!'};
   d.members.push(m);
   const deskPos=[[room.rx+2,room.ry+2],[room.rx+4,room.ry+2],[room.rx+2,room.ry+4]][si];
   grid[deskPos[1]][deskPos[0]]=FURN;
   const e=new Emp(m, d, room.seats[si]);
   emps.push(e); e.spawned=true; e.walkTo(e.home[0],e.home[1]);
-  HR.fired=HR.fired.filter(n=>n!==name); store.set('fired',HR.fired);
-  HR.hired.push({dept:d.short, n:name, duty:m.duty}); store.set('hired',HR.hired);
+  saveCompany();
   chatEmp(e, `${name}입니다! 오늘부터 ${d.name} ${m.duty} 담당으로 열심히 하겠습니다.`);
-  log(`채용: ${d.short} <b>${name}</b> (${m.duty})`);
-  const sel=document.getElementById('task-who');
-  const og=[...sel.querySelectorAll('optgroup')].find(o=>o.label===d.short);
-  if(og){ const o=document.createElement('option'); o.value=name; o.textContent=name+'(팀원)'; og.appendChild(o); }
+  log(`채용: ${d.short} <b>${name}</b> (${m.role}·${m.duty})`);
+  refreshWhoSelect(); renderDepts();
 }
 async function fireEmp(e){
   if(e.isCEO){ chatEmp(SEC,'대표님은 해고할 수 없어요. 여기가 대표님 회사인걸요.'); return; }
   if(e.name==='김세리'){ chatEmp(SEC,'저를 내보내시면 보고드릴 사람이 없어요. 저 말고 다른 직원으로 부탁드려요.'); return; }
   e.dept.members=e.dept.members.filter(m=>m.n!==e.name);
-  if(!HR.fired.includes(e.name)) HR.fired.push(e.name); store.set('fired',HR.fired);
-  HR.hired=HR.hired.filter(h=>h.n!==e.name); store.set('hired',HR.hired);
-  const sel=document.getElementById('task-who');
-  [...sel.querySelectorAll('option')].filter(o=>o.value===e.name).forEach(o=>o.remove());
+  saveCompany(); refreshWhoSelect(); renderDepts();
   chatEmp(SEC, `${e.dept.short} ${e.name} 퇴사 처리했어요. 진행 중이던 지시 업무는 보류로 남습니다.`);
   log(`퇴사: ${e.dept.short} <b>${e.name}</b>`);
   e.inMeeting=false; e.summoned=false; e.state=ST.IDLE; e.fired=true;
@@ -765,6 +871,18 @@ function handleCommand(raw){
   if(/자동 사이클|자동 모드|시나리오/.test(q)){
     chatEmp(SEC,'자동 시나리오는 폐지했어요. 회사는 대표님이 시키는 일만 합니다.'); return;
   }
+  // 부서 신설/폐지
+  if(q.includes('부서') && /(추가|만들|신설|생성)/.test(q)){
+    const nm=/[:：]/.test(q)? q.slice(q.search(/[:：]/)+1).trim()
+      : q.replace(/부서|추가|만들어\s*줘|만들어|만들자|신설|생성|해\s*줘|해/g,' ').trim();
+    addDept(nm); return;
+  }
+  if(q.includes('부서') && /(삭제|없애|폐지)/.test(q)){
+    const d=company.depts.find(d=> q.includes(d.name) || q.includes(d.short));
+    if(d) removeDept(d);
+    else chatEmp(SEC,'어느 부서를 없앨지 이름을 함께 적어주세요. 예: "기획팀 부서 삭제"');
+    return;
+  }
   // 채용·해고
   if(/채용|입사|영입/.test(q)){
     const rest=/[:：]/.test(q)? q.slice(q.search(/[:：]/)+1) : q.replace(/채용|입사|영입/g,' ');
@@ -789,6 +907,20 @@ function handleCommand(raw){
   if(/연동|연결/.test(q)){
     if(/완료|됐|됨|성공|해제|풀어/.test(q)){ resolveLink(q); return; }
     chatEmp(SEC,'오른쪽 연동 관리 칸에서 항목별로 [연결]을 누르시면 돼요. 이 프로그램은 안전 규칙상 실제 접속 정보(키·주소)를 담지 않아서, 연동 표시와 담당 직원 가동 상태만 관리합니다. 새 항목이 필요하면 칸 아래 입력으로 추가해 주세요.');
+    return;
+  }
+  // 완료물 위치 / 됐는지 질문
+  if(/(완료된|결과물|산출물|어디서\s*보|어디서\s*확인|어디서봐)/.test(q)){
+    const done=tasks.filter(t=>t.status==='완료');
+    chatEmp(SEC, done.length
+      ? `완료된 지시는 ${done.length}건 — 목표·업무 보드의 '완료' 칩에서 볼 수 있어요. 최근: ${done.slice(-3).map(t=>`${t.who} "${t.text}"`).join(' / ')}. 다만 기획안·문서 같은 실제 산출물은 이 화면이 만들지 못해요 — 그런 일은 클로드 채팅에 시키면 진짜 파일로 받아보실 수 있어요.`
+      : '아직 완료된 지시가 없어요. 업무를 시키시면 완료되는 대로 보드에 표시할게요.');
+    return;
+  }
+  if(/(다\s*[했헀]|끝났|(됐|됬)어)/.test(q)){
+    const last=tasks[tasks.length-1];
+    chatEmp(SEC, last? `마지막 지시 "${last.text}"(${last.who})는 지금 "${last.status}" 상태예요.`
+                     : '아직 지시하신 일이 없어요. 시킬 일을 말씀해 주세요.');
     return;
   }
   // 직원 이름이 들어간 말은 그 사람이 받는다 (지시면 업무 등록, 아니면 상태 답변)
@@ -825,6 +957,7 @@ function handleCommand(raw){
   if(q.length<2){ chatEmp(SEC,'짧아서 못 알아들었어요. 한 번만 더 말씀해 주세요.'); return; }
   // 그 외 대표의 모든 말은 지시로 접수 — 내용에 맞는 부서에 배정
   const pick=pickDeptForGoal(q);
+  if(!pick){ chatEmp(SEC,'지시로 접수하고 싶은데 맡길 직원이 없어요. 회사 설정 칸에서 부서를 만들고 "채용: 부서, 이름, 역할"로 뽑아주세요.'); return; }
   const lead2=byName(pick.dept.members[0].n);
   const content2=extractTask(q,'§')||q;
   chatEmp(SEC, `지시로 접수했어요. 내용상 ${pick.dept.name} 소관이라 ${lead2.name} ${lead2.role}에게 배정할게요. 진행은 업무 보드에서 보실 수 있어요.`);
@@ -992,13 +1125,20 @@ function frame(now){
 
 /* ================= 이벤트 바인딩 ================= */
 const whoSel=document.getElementById('task-who');
-rooms.forEach(r=>{
-  const og=document.createElement('optgroup'); og.label=r.dept.short;
-  r.dept.members.forEach(m=>{
-    const o=document.createElement('option'); o.value=m.n; o.textContent=m.n+'('+m.role+')'; og.appendChild(o);
+function refreshWhoSelect(){
+  whoSel.innerHTML='';
+  rooms.forEach(r=>{
+    const og=document.createElement('optgroup'); og.label=r.dept.short;
+    r.dept.members.forEach(m=>{
+      const o=document.createElement('option'); o.value=m.n; o.textContent=m.n+'('+m.role+')'; og.appendChild(o);
+    });
+    whoSel.appendChild(og);
   });
-  whoSel.appendChild(og);
-});
+  if(!whoSel.options.length){
+    const o=document.createElement('option'); o.value=''; o.textContent='직원 없음'; whoSel.appendChild(o);
+  }
+}
+refreshWhoSelect();
 document.getElementById('goal-add').onclick=()=>{
   const i=document.getElementById('goal-in'), v=i.value.trim();
   if(v){ goals.push(v); saveBoard(); renderBoard(); i.value=''; }
@@ -1006,9 +1146,31 @@ document.getElementById('goal-add').onclick=()=>{
 document.getElementById('goal-in').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('goal-add').click(); });
 document.getElementById('task-add').onclick=()=>{
   const i=document.getElementById('task-in'), v=i.value.trim();
+  if(!whoSel.value){ chatEmp(SEC,'아직 직원이 없어요. 회사 설정에서 부서를 만들고 채용부터 해주세요.'); return; }
   if(v){ addTask(whoSel.value, v); i.value=''; }
 };
 document.getElementById('task-in').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('task-add').click(); });
+document.getElementById('cname').value=company.name;
+document.getElementById('cotitle').textContent=company.name;
+document.title=company.name+' — AI 오피스';
+document.getElementById('cname-save').onclick=()=>{
+  const v=document.getElementById('cname').value.trim();
+  if(!v) return;
+  company.name=v; saveCompany();
+  document.getElementById('cotitle').textContent=v;
+  document.title=v+' — AI 오피스';
+  chatEmp(SEC,`회사 이름을 "${v}"로 바꿨어요.`);
+};
+document.getElementById('cname').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('cname-save').click(); });
+document.getElementById('dept-add').onclick=()=>{ const i=document.getElementById('dept-in'); addDept(i.value); i.value=''; };
+document.getElementById('dept-in').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('dept-add').click(); });
+document.getElementById('setup-head').onclick=()=>{
+  const hidden=document.getElementById('setup-body').classList.toggle('hidden');
+  document.getElementById('setup-toggle').textContent=hidden?'펼치기':'접기';
+};
+document.getElementById('load-preset').onclick=loadPreset;
+document.getElementById('reset-all').onclick=resetAll;
+renderDepts();
 document.getElementById('link-add').onclick=()=>{
   const i=document.getElementById('link-in'), v=i.value.trim();
   if(!v) return;
@@ -1043,7 +1205,9 @@ cv.addEventListener('click',ev=>{
 });
 
 /* ================= 시작 ================= */
-chatEmp(SEC,'안녕하세요 대표님, 비서실장 김세리입니다. 회사는 대표님이 시키는 일만 합니다. 채팅으로 지시하거나 목표·업무 보드에 적어주세요.');
+chatEmp(SEC, company.depts.length
+  ? '안녕하세요 대표님, 비서실장 김세리입니다. 회사는 대표님이 시키는 일만 합니다. 채팅으로 지시하거나 목표·업무 보드에 적어주세요.'
+  : '안녕하세요 대표님, 비서실장 김세리입니다. 지금은 뼈대만 있는 회사예요 — 회사 설정 칸에서 이름을 정하고 부서를 만든 뒤 채용해 주세요. 참고가 필요하면 [예시 회사 불러오기]를 누르시면 12부서 32명 예시가 들어옵니다.');
 renderBoard();
 renderLinks();
 requestAnimationFrame(frame);
