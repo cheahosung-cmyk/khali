@@ -20,13 +20,6 @@
   #stage{flex:1; min-width:0; position:relative; background:var(--panel); border:1px solid var(--line);
     border-radius:12px; overflow:auto; display:flex; align-items:flex-start; justify-content:center;}
   #cv{display:block; margin:auto;}
-  #banner{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    background:rgba(25,29,38,.95); border:1px solid var(--mint); border-radius:14px;
-    padding:26px 34px; text-align:center; z-index:5;}
-  #banner h2{color:var(--mint); margin-bottom:10px; font-size:20px;}
-  #banner p{color:var(--dim); font-size:13px; line-height:1.7; margin-bottom:14px;}
-  #banner button{background:var(--mint); color:#10241d; border:0; border-radius:8px;
-    padding:9px 18px; font-size:14px; font-weight:700; cursor:pointer;}
   .hidden{display:none !important;}
 
   #side{width:360px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; min-height:0;}
@@ -115,11 +108,6 @@
 <div id="app">
   <div id="stage">
     <canvas id="cv"></canvas>
-    <div id="banner" class="hidden">
-      <h2>하루 일과 완료</h2>
-      <p id="banner-body"></p>
-      <button onclick="location.reload()">하루 다시 시작</button>
-    </div>
   </div>
   <aside id="side">
     <div class="card" id="hud">
@@ -391,20 +379,21 @@ const SEC=emps.find(e=>e.name==='김세리');
 const byName=n=>emps.find(e=>e.name===n);
 
 /* ================= 시뮬레이션 시계·진행 상태 ================= */
-let simMin=0; // 07:00 기준 경과(분)
+let simMin=0; // 07:00 기준 경과(분) — 24시간 무중단으로 계속 흐른다
 let completedSteps=0, curStep={n:0,label:'출근 준비',dept:null};
-let approvalWaitStart=null, focusMode=false, dayOver=false;
+let approvalWaitStart=null, focusMode=false;
 const linkWaiting=[]; // {emp, need}
+const linkResolved=new Set(); // 대표가 "연동 완료"를 선언한 직원 이름
 
 function clockStr(){
-  const t=7*60+Math.floor(simMin);
+  const t=(7*60+Math.floor(simMin))%1440;
   return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');
 }
 const STEP_NAMES=['① 전원 출근','② 시장조사','③ 브랜드 분석','④ 아이디어 10개','⑤ 브랜드 QA','⑥ TOP 3 선정',
   '⑦ 대표 승인 대기','⑧ 대본 작성','⑨ 릴스·캐러셀 제작','⑩ 결과물 저장','⑪ 성과 기록','⑫ 비서실 브리핑'];
 function setStep(n,dept,task){
   curStep={n, label:STEP_NAMES[n-1], dept, task};
-  document.getElementById('stepname').textContent=curStep.label+(task?' — '+task:'');
+  document.getElementById('stepname').textContent=(CYCLE>1? CYCLE+'회차 · ':'')+curStep.label+(task?' — '+task:'');
   document.getElementById('barfill').style.width=Math.round((n-1)/12*100)+'%';
 }
 function finishStep(){ completedSteps=curStep.n;
@@ -474,6 +463,15 @@ async function runDay(){
   await Promise.all(arrivals);
   finishStep(); log('① 전원 출근 완료 (32명 + 대표)');
 
+  // 퇴근 없음 — ②~⑫ 사이클을 24시간 무한 반복
+  while(true) await runCycle();
+}
+
+let CYCLE=0;
+async function runCycle(){
+  CYCLE++;
+  if(CYCLE>1) log(`<b>${CYCLE}회차 사이클 시작</b> — 24시간 무중단 운영`);
+
   // ② 시장조사
   const [한지원,문태호,서가을]=D(0);
   setStep(2,rooms[0].dept,'뉴스·동향 수집과 출처 검증');
@@ -493,14 +491,23 @@ async function runDay(){
   setStep(3,rooms[1].dept,'페르소나·지표 분석');
   임채린.state=ST.WORK;
   await wait(2500);
-  임채린.state=ST.LINK; 임채린.say('계정 지표 연결을 기다려요',3000);
-  linkWaiting.push({emp:임채린, need:'인스타 계정 지표'});
-  log('③ 지표 데이터 미연동 — 임의로 만들지 않고 <b>연동 대기</b>로 기록');
   const 국태양=byName('국태양'), 배다인=byName('배다인');
-  국태양.state=ST.LINK; linkWaiting.push({emp:국태양, need:'외부 자동화 연결'});
-  배다인.state=ST.LINK; linkWaiting.push({emp:배다인, need:'협업 문의 메일함 연결'});
-  log('자동화 운영·파트너십 소통팀도 외부 연결 부재로 연동 대기 전환 (총 3팀)');
-  await workPhase([백도윤,곽민준], 8000, [
+  const maybeLink=(emp,need)=>{
+    if(linkResolved.has(emp.name)) return;
+    emp.state=ST.LINK;
+    if(!linkWaiting.some(w=>w.emp===emp)) linkWaiting.push({emp,need});
+  };
+  maybeLink(임채린,'인스타 계정 지표');
+  maybeLink(국태양,'외부 자동화 연결');
+  maybeLink(배다인,'협업 문의 메일함 연결');
+  if(CYCLE===1 && linkWaiting.length){
+    임채린.say('계정 지표 연결을 기다려요',3000);
+    log('③ 지표 데이터 미연동 — 임의로 만들지 않고 <b>연동 대기</b>로 기록');
+    log('자동화 운영·파트너십 소통팀도 외부 연결 부재로 연동 대기 전환 (총 3팀)');
+  }
+  const analysts=[백도윤,곽민준];
+  if(linkResolved.has('임채린')) analysts.push(임채린);
+  await workPhase(analysts, 8000, [
     [곽민준,'이건 우리 톤이 아니에요 — 2건 제외할게요.'],
     [백도윤,'페르소나 적합 소재 7건 확정했어요.']]);
   finishStep(); log('③ 브랜드 분석 완료 (지표 항목은 연동 대기)');
@@ -623,19 +630,18 @@ async function runDay(){
   }
   await SEC.walkTo(SEC.home[0],SEC.home[1]);
   SEC.state=ST.DONE;
-  finishStep(); log('⑫ 브리핑 종료 — <b>하루 일과 완료</b>');
-  dayOver=true;
+  finishStep(); log(`⑫ 브리핑 종료 — <b>${CYCLE}회차 사이클 완료</b> (릴스 1·캐러셀 1·아이디어 7건 통과)`);
   emps.forEach(e=>{ if(!e.isCEO) e.state=ST.DONE; });
-  document.getElementById('banner-body').innerHTML=
-    '산출물: 릴스 1건 · 캐러셀 1건 · 아이디어 통과 7건<br>연동 대기 3팀(지표·자동화·파트너십)은 내일 우선 복구 대상입니다.';
-  document.getElementById('banner').classList.remove('hidden');
+  await wait(6000); // 잠깐 정비 후 곧바로 다음 사이클
+  emps.forEach(e=>{ if(!e.isCEO) e.state=ST.IDLE; });
+  linkWaiting.forEach(w=>{ w.emp.state=ST.LINK; });
 }
 
 /* ================= 자율 행동 (커피) ================= */
 async function wanderLoop(){
   while(true){
     await wait(5200);
-    if(focusMode || dayOver) continue;
+    if(focusMode) continue;
     const wandering=emps.filter(e=>e.wandering).length;
     if(wandering>=3) continue;
     const cands=emps.filter(e=>!e.isCEO && !e.inMeeting && !e.summoned && !e.wandering &&
@@ -742,6 +748,7 @@ function extractTask(q, name){
   return c.trim();
 }
 const ORDER_RE=/(시켜|시키|하라고|부탁|지시)/;
+const isOrderText=q=> ORDER_RE.test(q) || /(해\s*줘|해\s*주세요|해라|하자|합시다)\s*[.!?~]*$/.test(q);
 
 /* ================= 대표 지시창 ================= */
 function teamStatusLine(dept){
@@ -807,6 +814,60 @@ function toggleFocus(){
     log('집중 모드 OFF');
   }
 }
+// 목표 내용으로 맡을 부서를 고른다
+function pickDeptForGoal(goal){
+  const rules=[
+    [/아이디어|기획|상품|설계|콘텐츠|소재/, 2, '아이디어·기획 목표라 저희 전략 1팀이 잡는 게 맞아요.'],
+    [/릴스|영상|편집|촬영/, 5, '영상 목표라 릴스 제작팀이 맡을게요.'],
+    [/캐러셀|카드뉴스|디자인/, 6, '캐러셀 목표라 저희가 맡을게요.'],
+    [/협업|제휴|파트너|광고/, 7, '협업 목표라 파트너십에서 맡을게요.'],
+    [/수익|매출|정산|재무|만원|투자/, 8, '돈이 걸린 목표라 재무에서 현황부터 정리할게요.'],
+    [/지표|데이터|분석|페르소나/, 1, '데이터 목표라 인텔리전스팀이 맡을게요.'],
+    [/자동화|연동|봇/, 10, '자동화 목표라 저희가 맡을게요.'],
+  ];
+  for(const [re,idx,reason] of rules) if(re.test(goal)) return {dept:rooms[idx].dept, reason};
+  return {dept:rooms[2].dept, reason:'기획성 목표라 전략 1팀이 먼저 잡을게요.'};
+}
+function focusOnGoal(){
+  if(!goals.length){
+    chatEmp(SEC,'등록된 오늘의 목표가 없어요. 위 목표·업무 보드에 먼저 추가해 주시면 바로 배정할게요.'); return;
+  }
+  const goal=goals[0];
+  const existing=tasks.find(t=>t.text===`[오늘의 목표] ${goal}`);
+  if(existing){
+    chatEmp(SEC, `오늘의 목표 "${goal}"는 이미 ${existing.who}에게 배정돼 있고 지금 "${existing.status}"예요. 다른 일보다 먼저 하라고 다시 당부했어요.`);
+    const e=byName(existing.who); if(e) e.say('목표 최우선으로 할게요!',2400);
+    return;
+  }
+  const pick=pickDeptForGoal(goal);
+  const lead=byName(pick.dept.members[0].n);
+  chatEmp(SEC, `오늘의 목표 "${goal}" 전 부서에 전파했어요. 나머지 분석은 목표에 필요한 것만 남기고, 실행은 ${pick.dept.name}에 맡길게요.`);
+  emps.forEach((e,i)=>{ if(!e.isCEO) setTimeout(()=>e.say('목표 확인했어요!',2200), (i%8)*260); });
+  log(`대표 지시: <b>오늘의 목표 우선</b> — ${goal}`);
+  addTask(lead.name, `[오늘의 목표] ${goal}`);
+  chatEmp(lead, pick.reason);
+}
+function resolveLink(q){
+  let targets=linkWaiting.filter(w=>
+    (q.includes('지표')&&w.emp.name==='임채린') ||
+    (q.includes('자동화')&&w.emp.name==='국태양') ||
+    ((q.includes('메일')||q.includes('협업'))&&w.emp.name==='배다인'));
+  if(!targets.length) targets=[...linkWaiting];
+  if(!targets.length){ chatEmp(SEC,'지금 연동 대기 중인 팀이 없어요. 전부 정상 가동 중입니다.'); return; }
+  targets.forEach(w=>{
+    linkResolved.add(w.emp.name);
+    w.emp.state=ST.IDLE;
+    w.emp.say('연결 확인! 다시 진행할게요',2600);
+    const i=linkWaiting.indexOf(w); if(i>=0) linkWaiting.splice(i,1);
+  });
+  chatEmp(SEC, `연동 완료로 처리했어요 — ${targets.map(w=>w.emp.dept.short+' '+w.emp.name).join(', ')} 다시 가동합니다. 다음 사이클부터 해당 항목은 정상 작업으로 돌아요.`);
+  log('대표 확인: <b>연동 복구</b> — '+targets.map(w=>w.emp.name).join(', '));
+}
+function broadcastOrder(q){
+  chatEmp(SEC, `전 직원에게 전파했어요 — "${q}"`);
+  emps.forEach((e,i)=>{ if(!e.isCEO) setTimeout(()=>e.say('네, 대표님!',2000), (i%8)*240); });
+  log('대표 방송: '+q);
+}
 function personAnswer(e){
   if(e.isCEO){ chatEmp(SEC,'대표님은… 대표님이시잖아요.'); return; }
   let extra='';
@@ -821,10 +882,22 @@ function handleCommand(raw){
   if(q.includes('회의') && (q.includes('소집')||q.includes('모여')||q.includes('열어'))){ summonMeeting(); return; }
   if(q.includes('승인') && approvalWaitStart){ document.getElementById('approve-btn').click();
     chatEmp(SEC,'채팅 승인 확인 — 결재 처리했어요.'); return; }
+  if(q.includes('목표')){ focusOnGoal(); return; }
+  // 클로드/AI 연동 질문 — 정직하게 답한다
+  if(/클로드|claude|지피티|gpt|인공지능/i.test(q)){
+    chatEmp(SEC,'솔직히 말씀드릴게요. 이 프로그램은 안전 규칙 때문에 외부 AI·API 연결을 넣지 않았어요(키 노출·비용·외부 전송 문제). 제가 모르는 건 이 화면을 만들어 준 클로드 채팅에 직접 물어봐 주세요 — 필요한 기능은 다음 업데이트로 저희한테 가르쳐 줄 수 있어요.');
+    return;
+  }
+  // 연동/연결 관련
+  if(/연동|연결/.test(q)){
+    if(/완료|됐|됨|성공|해제|풀어/.test(q)){ resolveLink(q); return; }
+    chatEmp(SEC,'연동 대기는 이 프로그램이 실제 외부 서비스(인스타 지표·메일함 등)에 접속하지 않아서 생기는 표시예요. 안전 규칙상 접속 정보는 프로그램에 넣지 않거든요. 연결된 셈 치고 진행하시려면 "지표 연동 완료"처럼 말씀해 주세요 — 해당 팀을 바로 다시 돌릴게요.');
+    return;
+  }
   // 직원 이름이 들어간 말은 그 사람이 받는다 (지시면 업무 등록, 아니면 상태 답변)
   const person=emps.find(e=>!e.isCEO && q.includes(e.name)) || emps.find(e=>!e.isCEO && q.includes(e.code));
   if(person){
-    if(ORDER_RE.test(q)){
+    if(isOrderText(q)){
       const content=extractTask(q, person.name);
       if(content.length>=2){ addTask(person.name, content); return; }
       chatEmp(SEC, `무엇을 시킬지 내용을 같이 적어주세요. 예: "${person.name}한테 정산 정리 시켜"`); return;
@@ -838,17 +911,27 @@ function handleCommand(raw){
   const room=rooms.find(r=> q.includes(r.dept.short) || q.includes(r.dept.name) || r.dept.keys.some(k=>ql.includes(k)));
   if(room){
     const lead=byName(room.dept.members[0].n);
-    if(ORDER_RE.test(q)){
+    if(isOrderText(q)){
       const lit=[room.dept.name, room.dept.short+'팀', room.dept.short].find(s=>q.includes(s));
-      const content=extractTask(lit? q.replace(lit,' ') : q, ' ');
+      const content=extractTask(lit? q.replace(lit,' ') : q, '§');
       if(content.length>=2){ addTask(lead.name, content); return; }
     }
     chatEmp(lead, `${room.dept.name} 상황 보고드려요. ${teamStatusLine(room.dept)}. ${lead.tic}`);
     return;
   }
   if(q.includes('늦')||q.includes('왜 안')||q.includes('병목')){ answerWhySlow(); return; }
-  if(q.includes('현황')||q.includes('보고')||q.includes('상황')){ answerStatus(); return; }
-  chatEmp(SEC,'무슨 말씀인지 못 알아들었어요. "현황 보고", "왜 늦어져?", "회의 소집", "집중 모드", 부서명이나 직원 이름으로 물어봐 주세요.');
+  if(q.includes('현황')||q.includes('상황')||/^보고/.test(q)){ answerStatus(); return; }
+  // 전체를 향한 독려·지시는 방송으로 전파
+  if(/(다들|모두|전원|여러분)/.test(q)){ broadcastOrder(q); return; }
+  // 질문형이면 최선의 현황 답변
+  if(q.endsWith('?')||/(뭐|어때|어떻|언제|누가|얼마나)/.test(q)){ answerStatus(); return; }
+  if(q.length<2){ chatEmp(SEC,'짧아서 못 알아들었어요. 한 번만 더 말씀해 주세요.'); return; }
+  // 그 외 대표의 모든 말은 지시로 접수 — 내용에 맞는 부서에 배정
+  const pick=pickDeptForGoal(q);
+  const lead2=byName(pick.dept.members[0].n);
+  const content2=extractTask(q,'§')||q;
+  chatEmp(SEC, `지시로 접수했어요. 내용상 ${pick.dept.name} 소관이라 ${lead2.name} ${lead2.role}에게 배정할게요. 진행은 업무 보드에서 보실 수 있어요.`);
+  addTask(lead2.name, content2);
 }
 
 /* ================= 렌더링 ================= */
@@ -995,7 +1078,7 @@ function drawBubble(e,now){
 let lastT=performance.now();
 function frame(now){
   const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
-  if(!dayOver) simMin += dt*SPEED*1.4;
+  simMin += dt*SPEED*1.4;
   for(const e of emps) e.update(dt);
   drawMap();
   const sorted=[...emps].sort((a,b)=>a.py-b.py);
