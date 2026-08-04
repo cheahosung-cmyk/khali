@@ -1,0 +1,47 @@
+{
+ "date": "2026-08-05",
+ "candidates": [
+  {
+   "market": "US",
+   "ticker": "ALL",
+   "name": "Allstate",
+   "price": 262.56,
+   "composite_score": 82.4
+  },
+  {
+   "market": "US",
+   "ticker": "TRV",
+   "name": "Travelers Companies (The)",
+   "price": 377.15,
+   "composite_score": 80.5
+  },
+  {
+   "market": "US",
+   "ticker": "TROW",
+   "name": "T. Rowe Price",
+   "price": 115.79,
+   "composite_score": 77.4
+  },
+  {
+   "market": "US",
+   "ticker": "BMY",
+   "name": "Bristol Myers Squibb",
+   "price": 65.89,
+   "composite_score": 77.2
+  },
+  {
+   "market": "US",
+   "ticker": "USB",
+   "name": "U.S. Bancorp",
+   "price": 64.23,
+   "composite_score": 76.5
+  },
+  {
+   "market": "US",
+   "ticker": "VLO",
+   "name": "Valero Energy",
+   "price": 308.73,
+   "composite_score": 76.4
+  }
+ ]
+}
