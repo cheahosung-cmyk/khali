@@ -1,0 +1,89 @@
+{
+ "date": "2026-08-11",
+ "candidates": [
+  {
+   "market": "KR",
+   "ticker": "002990",
+   "name": "금호건설",
+   "price": 8840,
+   "composite_score": 80.7
+  },
+  {
+   "market": "KR",
+   "ticker": "194370",
+   "name": "제이에스코퍼레이션",
+   "price": 13300,
+   "composite_score": 79.9
+  },
+  {
+   "market": "KR",
+   "ticker": "005830",
+   "name": "DB손해보험",
+   "price": 162300,
+   "composite_score": 78.2
+  },
+  {
+   "market": "KR",
+   "ticker": "001450",
+   "name": "현대해상",
+   "price": 41000,
+   "composite_score": 77.2
+  },
+  {
+   "market": "KR",
+   "ticker": "453340",
+   "name": "현대그린푸드",
+   "price": 18910,
+   "composite_score": 76.9
+  },
+  {
+   "market": "KR",
+   "ticker": "008490",
+   "name": "서흥",
+   "price": 28600,
+   "composite_score": 76.7
+  },
+  {
+   "market": "US",
+   "ticker": "ALL",
+   "name": "Allstate",
+   "price": 269.67,
+   "composite_score": 84.9
+  },
+  {
+   "market": "US",
+   "ticker": "PRU",
+   "name": "Prudential Financial",
+   "price": 122.11,
+   "composite_score": 82.8
+  },
+  {
+   "market": "US",
+   "ticker": "TRV",
+   "name": "Travelers Companies (The)",
+   "price": 375.62,
+   "composite_score": 81.8
+  },
+  {
+   "market": "US",
+   "ticker": "PSX",
+   "name": "Phillips 66",
+   "price": 215.52,
+   "composite_score": 79.5
+  },
+  {
+   "market": "US",
+   "ticker": "USB",
+   "name": "U.S. Bancorp",
+   "price": 64.19,
+   "composite_score": 77.6
+  },
+  {
+   "market": "US",
+   "ticker": "MTB",
+   "name": "M&T Bank",
+   "price": 251.13,
+   "composite_score": 76.8
+  }
+ ]
+}
