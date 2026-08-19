@@ -1,0 +1,89 @@
+{
+ "date": "2026-08-20",
+ "candidates": [
+  {
+   "market": "KR",
+   "ticker": "001450",
+   "name": "현대해상",
+   "price": 50000,
+   "composite_score": 80.3
+  },
+  {
+   "market": "KR",
+   "ticker": "002990",
+   "name": "금호건설",
+   "price": 12600,
+   "composite_score": 79.9
+  },
+  {
+   "market": "KR",
+   "ticker": "071320",
+   "name": "지역난방공사",
+   "price": 73000,
+   "composite_score": 79.6
+  },
+  {
+   "market": "KR",
+   "ticker": "005830",
+   "name": "DB손해보험",
+   "price": 187500,
+   "composite_score": 78.4
+  },
+  {
+   "market": "KR",
+   "ticker": "073240",
+   "name": "금호타이어",
+   "price": 7600,
+   "composite_score": 76.1
+  },
+  {
+   "market": "KR",
+   "ticker": "006040",
+   "name": "동원산업",
+   "price": 36800,
+   "composite_score": 76.0
+  },
+  {
+   "market": "US",
+   "ticker": "ALL",
+   "name": "Allstate",
+   "price": 259.74,
+   "composite_score": 85.9
+  },
+  {
+   "market": "US",
+   "ticker": "APA",
+   "name": "APA Corporation",
+   "price": 43.45,
+   "composite_score": 83.9
+  },
+  {
+   "market": "US",
+   "ticker": "PRU",
+   "name": "Prudential Financial",
+   "price": 122.22,
+   "composite_score": 80.7
+  },
+  {
+   "market": "US",
+   "ticker": "TRV",
+   "name": "Travelers Companies (The)",
+   "price": 362.22,
+   "composite_score": 78.8
+  },
+  {
+   "market": "US",
+   "ticker": "BMY",
+   "name": "Bristol Myers Squibb",
+   "price": 67.61,
+   "composite_score": 77.8
+  },
+  {
+   "market": "US",
+   "ticker": "VLO",
+   "name": "Valero Energy",
+   "price": 346.26,
+   "composite_score": 76.2
+  }
+ ]
+}
