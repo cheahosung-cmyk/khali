@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "khali-tools",
+  "description": "Plugins for the Khali AI Agent Management System.",
+  "owner": {
+    "name": "cheahosung-cmyk",
+    "email": "cheahosung@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "khali-agent-tools",
+      "source": "./plugins/khali-agent-tools",
+      "description": "Scaffolding, review, and architecture helpers for building Khali agents.",
+      "version": "0.1.0",
+      "author": {
+        "name": "cheahosung-cmyk",
+        "email": "cheahosung@gmail.com"
+      },
+      "homepage": "https://github.com/cheahosung-cmyk/khali",
+      "repository": "https://github.com/cheahosung-cmyk/khali",
+      "license": "MIT",
+      "keywords": ["agents", "scaffolding", "code-review", "khali"],
+      "category": "productivity"
+    },
+    {
+      "name": "khali-workflow",
+      "source": "./plugins/khali-workflow",
+      "description": "Structured senior-developer workflow skills (brainstorm, plan, TDD, systematic debugging, code review) that make Claude plan and verify before writing code.",
+      "version": "0.1.0",
+      "author": {
+        "name": "cheahosung-cmyk",
+        "email": "cheahosung@gmail.com"
+      },
+      "homepage": "https://github.com/cheahosung-cmyk/khali",
+      "repository": "https://github.com/cheahosung-cmyk/khali",
+      "license": "MIT",
+      "keywords": ["workflow", "tdd", "planning", "debugging", "code-review", "khali"],
+      "category": "workflow"
+    },
+    {
+      "name": "khali-trading",
+      "source": "./plugins/khali-trading",
+      "description": "Safety skills for building exchange/trading bots: resilient API boundaries, live-money review, and backtest iteration.",
+      "version": "0.1.0",
+      "author": {
+        "name": "cheahosung-cmyk",
+        "email": "cheahosung@gmail.com"
+      },
+      "homepage": "https://github.com/cheahosung-cmyk/khali",
+      "repository": "https://github.com/cheahosung-cmyk/khali",
+      "license": "MIT",
+      "keywords": ["trading", "exchange", "api", "resilience", "backtest", "khali"],
+      "category": "trading"
+    }
+  ]
+}
