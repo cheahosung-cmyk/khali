@@ -1,0 +1,47 @@
+{
+ "date": "2026-09-04",
+ "candidates": [
+  {
+   "market": "US",
+   "ticker": "APA",
+   "name": "APA Corporation",
+   "price": 44.7,
+   "composite_score": 85.8
+  },
+  {
+   "market": "US",
+   "ticker": "ALL",
+   "name": "Allstate",
+   "price": 259.34,
+   "composite_score": 83.0
+  },
+  {
+   "market": "US",
+   "ticker": "PSX",
+   "name": "Phillips 66",
+   "price": 256.09,
+   "composite_score": 78.7
+  },
+  {
+   "market": "US",
+   "ticker": "CF",
+   "name": "CF Industries",
+   "price": 139.27,
+   "composite_score": 78.2
+  },
+  {
+   "market": "US",
+   "ticker": "TGT",
+   "name": "Target Corporation",
+   "price": 163.36,
+   "composite_score": 77.0
+  },
+  {
+   "market": "US",
+   "ticker": "PRU",
+   "name": "Prudential Financial",
+   "price": 119.84,
+   "composite_score": 76.3
+  }
+ ]
+}
