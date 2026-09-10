@@ -1,0 +1,89 @@
+{
+ "date": "2026-09-10",
+ "candidates": [
+  {
+   "market": "KR",
+   "ticker": "005830",
+   "name": "DB손해보험",
+   "price": 190300,
+   "composite_score": 83.9
+  },
+  {
+   "market": "KR",
+   "ticker": "002990",
+   "name": "금호건설",
+   "price": 15250,
+   "composite_score": 83.2
+  },
+  {
+   "market": "KR",
+   "ticker": "001450",
+   "name": "현대해상",
+   "price": 49300,
+   "composite_score": 80.9
+  },
+  {
+   "market": "KR",
+   "ticker": "078930",
+   "name": "GS",
+   "price": 123000,
+   "composite_score": 78.3
+  },
+  {
+   "market": "KR",
+   "ticker": "316140",
+   "name": "우리금융지주",
+   "price": 33950,
+   "composite_score": 74.2
+  },
+  {
+   "market": "KR",
+   "ticker": "086790",
+   "name": "하나금융지주",
+   "price": 134700,
+   "composite_score": 73.0
+  },
+  {
+   "market": "US",
+   "ticker": "APA",
+   "name": "APA Corporation",
+   "price": 43.55,
+   "composite_score": 86.0
+  },
+  {
+   "market": "US",
+   "ticker": "ALL",
+   "name": "Allstate",
+   "price": 253.46,
+   "composite_score": 80.5
+  },
+  {
+   "market": "US",
+   "ticker": "CF",
+   "name": "CF Industries",
+   "price": 134.33,
+   "composite_score": 79.5
+  },
+  {
+   "market": "US",
+   "ticker": "TGT",
+   "name": "Target Corporation",
+   "price": 162.71,
+   "composite_score": 77.5
+  },
+  {
+   "market": "US",
+   "ticker": "PSX",
+   "name": "Phillips 66",
+   "price": 259.14,
+   "composite_score": 77.3
+  },
+  {
+   "market": "US",
+   "ticker": "PRU",
+   "name": "Prudential Financial",
+   "price": 119.38,
+   "composite_score": 76.5
+  }
+ ]
+}
