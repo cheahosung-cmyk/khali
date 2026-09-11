@@ -1,0 +1,47 @@
+{
+ "date": "2026-09-11",
+ "candidates": [
+  {
+   "market": "US",
+   "ticker": "APA",
+   "name": "APA Corporation",
+   "price": 44.84,
+   "composite_score": 86.4
+  },
+  {
+   "market": "US",
+   "ticker": "CF",
+   "name": "CF Industries",
+   "price": 138.11,
+   "composite_score": 80.6
+  },
+  {
+   "market": "US",
+   "ticker": "ALL",
+   "name": "Allstate",
+   "price": 253.58,
+   "composite_score": 80.4
+  },
+  {
+   "market": "US",
+   "ticker": "PSX",
+   "name": "Phillips 66",
+   "price": 260.78,
+   "composite_score": 78.0
+  },
+  {
+   "market": "US",
+   "ticker": "TGT",
+   "name": "Target Corporation",
+   "price": 157.52,
+   "composite_score": 77.0
+  },
+  {
+   "market": "US",
+   "ticker": "BBY",
+   "name": "Best Buy",
+   "price": 88.03,
+   "composite_score": 76.3
+  }
+ ]
+}
