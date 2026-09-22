@@ -1,0 +1,47 @@
+{
+ "date": "2026-09-22",
+ "candidates": [
+  {
+   "market": "US",
+   "ticker": "APA",
+   "name": "APA Corporation",
+   "price": 44.87,
+   "composite_score": 85.4
+  },
+  {
+   "market": "US",
+   "ticker": "CF",
+   "name": "CF Industries",
+   "price": 127.7,
+   "composite_score": 80.2
+  },
+  {
+   "market": "US",
+   "ticker": "EOG",
+   "name": "EOG Resources",
+   "price": 144.23,
+   "composite_score": 77.8
+  },
+  {
+   "market": "US",
+   "ticker": "DVN",
+   "name": "Devon Energy",
+   "price": 48.61,
+   "composite_score": 77.5
+  },
+  {
+   "market": "US",
+   "ticker": "PSX",
+   "name": "Phillips 66",
+   "price": 273.13,
+   "composite_score": 77.0
+  },
+  {
+   "market": "US",
+   "ticker": "BBY",
+   "name": "Best Buy",
+   "price": 92.85,
+   "composite_score": 76.5
+  }
+ ]
+}
