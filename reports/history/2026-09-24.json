@@ -1,0 +1,47 @@
+{
+ "date": "2026-09-24",
+ "candidates": [
+  {
+   "market": "US",
+   "ticker": "APA",
+   "name": "APA Corporation",
+   "price": 43.81,
+   "composite_score": 84.2
+  },
+  {
+   "market": "US",
+   "ticker": "BBY",
+   "name": "Best Buy",
+   "price": 93.22,
+   "composite_score": 78.5
+  },
+  {
+   "market": "US",
+   "ticker": "CF",
+   "name": "CF Industries",
+   "price": 123.27,
+   "composite_score": 78.3
+  },
+  {
+   "market": "US",
+   "ticker": "PSX",
+   "name": "Phillips 66",
+   "price": 261.75,
+   "composite_score": 77.9
+  },
+  {
+   "market": "US",
+   "ticker": "DVN",
+   "name": "Devon Energy",
+   "price": 47.59,
+   "composite_score": 76.7
+  },
+  {
+   "market": "US",
+   "ticker": "MPC",
+   "name": "Marathon Petroleum",
+   "price": 402.38,
+   "composite_score": 76.2
+  }
+ ]
+}
