@@ -1,0 +1,47 @@
+{
+ "date": "2026-10-15",
+ "candidates": [
+  {
+   "market": "US",
+   "ticker": "APA",
+   "name": "APA Corporation",
+   "price": 48.01,
+   "composite_score": 81.8
+  },
+  {
+   "market": "US",
+   "ticker": "DVN",
+   "name": "Devon Energy",
+   "price": 50.21,
+   "composite_score": 74.0
+  },
+  {
+   "market": "US",
+   "ticker": "PSX",
+   "name": "Phillips 66",
+   "price": 292.73,
+   "composite_score": 73.6
+  },
+  {
+   "market": "US",
+   "ticker": "PGR",
+   "name": "Progressive Corporation",
+   "price": 222.88,
+   "composite_score": 72.8
+  },
+  {
+   "market": "US",
+   "ticker": "SOLV",
+   "name": "Solventum",
+   "price": 86.3,
+   "composite_score": 72.7
+  },
+  {
+   "market": "US",
+   "ticker": "PTC",
+   "name": "PTC Inc.",
+   "price": 193.96,
+   "composite_score": 72.7
+  }
+ ]
+}
