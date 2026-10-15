@@ -1,172 +1,266 @@
-"""추천 성과 추적: 과거 추천 종목의 이후 수익률을 시장 지수와 비교해 검증한다.
-
-매 실행마다 그날의 추천을 reports/history/YYYY-MM-DD.json으로 남기고,
-다음 실행부터 과거 추천의 실제 수익률·시장 대비 초과수익을 집계해
-"지난 추천 성적표" 섹션을 만든다.
-"""
-
+"""고정 거래일 성과. 과거 퀀트 후보와 구조화 최종 추천을 분리한다."""
+import argparse
+from collections import Counter
+from datetime import date as date_type, datetime, timezone
+import hashlib
 import json
-from datetime import datetime, timedelta
 from pathlib import Path
+import statistics
 
+import pandas as pd
+from .quality import STRATEGY_VERSION, schedule
 from .scoring import with_retry
 
-MIN_EVAL_DAYS = 5    # 추천 후 최소 5일(달력) 지나야 성과 평가 대상
-MAX_DETAIL_ROWS = 12  # 상세 표에 보여줄 최근 추천 수
-BENCHMARKS = {"KR": "KS11", "US": "^GSPC"}  # KOSPI, S&P500
+HORIZONS = (5, 20, 60)
+BENCHMARKS = {"US": "^GSPC", "KOSPI": "^KS11", "KOSDAQ": "^KQ11"}
 
 
-def save_snapshot(history_dir: str, date: str, kr: dict, us: dict) -> None:
-    """오늘의 추천을 검증용 JSON으로 저장(같은 날 재실행 시 덮어씀)."""
+def save_snapshot(history_dir, date, kr, us):
+    now = datetime.now(timezone.utc)
+    run_id = now.strftime("%Y%m%dT%H%M%S%fZ")
     records = []
     for market, result in (("KR", kr), ("US", us)):
         for c in result.get("candidates", []):
-            records.append({
-                "market": market,
-                "ticker": str(c["ticker"]),
-                "name": c["name"],
-                "price": c["price"],
-                "composite_score": c.get("composite_score"),
-            })
-    if not records:
-        return
-    path = Path(history_dir)
-    path.mkdir(parents=True, exist_ok=True)
-    (path / f"{date}.json").write_text(
-        json.dumps({"date": date, "candidates": records}, ensure_ascii=False, indent=1),
-        encoding="utf-8",
-    )
+            records.append({**c, "market": market, "ticker": str(c["ticker"])})
+    data = {"schema_version": 2, "strategy_version": STRATEGY_VERSION,
+            "run_id": run_id, "date": date, "generated_at": now.isoformat(),
+            "available_at": None, "candidates": records,
+            "markets": {"KR": {k: v for k, v in kr.items() if k != "candidates"},
+                        "US": {k: v for k, v in us.items() if k != "candidates"}}}
+    path = Path(history_dir) / "runs" / f"{date}-{run_id}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("x", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=2, allow_nan=False)
+    return str(path)
 
 
-def _load_history(history_dir: str, today: str) -> list[dict]:
-    entries = []
-    for f in sorted(Path(history_dir).glob("????-??-??.json")):
-        if f.stem >= today:
-            continue  # 오늘 것은 평가 대상이 아님
+def mark_published(path, available_at, url):
+    stamp = pd.Timestamp(available_at)
+    if stamp.tzinfo is None:
+        raise ValueError("발행 시각에 시간대 필요")
+    p = Path(path)
+    data = json.loads(p.read_text(encoding="utf-8"))
+    if data.get("available_at"):
+        if data.get("published_at") == stamp.isoformat() and data.get("report_url") == url:
+            return
+        raise ValueError("이미 발행된 이력의 시각은 변경 불가")
+    if stamp.floor("s") < pd.Timestamp(data["generated_at"]).floor("s"):
+        raise ValueError("발행 시각이 생성 시각보다 빠름")
+    # GitHub createdAt는 초 정밀도이므로 그 초의 끝 이후를 보수적 이용 가능 시각으로 사용.
+    data.update(published_at=stamp.isoformat(), available_at=(stamp + pd.Timedelta(seconds=1)).isoformat(), report_url=url)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
+
+
+def load_history(history_dir, today):
+    entries, errors = [], []
+    paths = sorted(Path(history_dir).glob("????-??-??.json"))
+    paths += sorted((Path(history_dir) / "runs").glob("*.json"))
+    for p in paths:
         try:
-            entries.append(json.loads(f.read_text(encoding="utf-8")))
-        except Exception:
-            continue
-    return entries
+            e = json.loads(p.read_text(encoding="utf-8"))
+            if not isinstance(e.get("candidates"), list) or not e.get("date"):
+                raise ValueError("이력 형식 오류")
+            date_type.fromisoformat(e["date"])
+            if any(not isinstance(c, dict) or c.get("market") not in {"KR", "US"} or not c.get("ticker")
+                   for c in e["candidates"]):
+                raise ValueError("종목 이력 형식 오류")
+            if e["date"] < today:
+                entries.append(e)
+        except Exception as err:
+            errors.append({"file": p.name, "error": type(err).__name__})
+    return entries, errors
 
 
-def _kr_price_series(ticker: str, start: str):
-    import FinanceDataReader as fdr
+def price_symbols(c):
+    if c["market"] == "US":
+        return c["ticker"], BENCHMARKS["US"]
+    listing = c.get("listing_market")
+    if listing not in {"KOSPI", "KOSDAQ"}:
+        return None, None  # 과거 이력의 시장 구분을 추측하지 않는다.
+    return c["ticker"] + (".KS" if listing == "KOSPI" else ".KQ"), BENCHMARKS[listing]
 
-    return with_retry(fdr.DataReader, ticker, start)["Close"].dropna()
 
-
-def _us_price_series(tickers: list[str], start: str) -> dict:
+def download_prices(symbols, start, asof):
+    """수정하지 않은 종가로 가격수익률 계산. 현금배당은 포함하지 않는다."""
     import yfinance as yf
-
-    if not tickers:
-        return {}
-    data = with_retry(
-        yf.download, tickers, start=start, interval="1d",
-        auto_adjust=True, group_by="ticker", progress=False, threads=True,
-    )
-    out = {}
-    for t in tickers:
+    out, errors = {}, []
+    end = (pd.Timestamp(asof).tz_convert("UTC").normalize() + pd.Timedelta(days=1)).date().isoformat()
+    for i in range(0, len(symbols), 80):
+        chunk = symbols[i:i+80]
         try:
-            series = (data[t]["Close"] if len(tickers) > 1 else data["Close"]).dropna()
-            if not series.empty:
-                out[t] = series
-        except KeyError:
-            continue
-    return out
+            data = with_retry(yf.download, chunk, start=start, end=end, auto_adjust=False,
+                              group_by="ticker", progress=False, threads=True, timeout=15)
+            for symbol in chunk:
+                try:
+                    frame = data[symbol] if isinstance(data.columns, pd.MultiIndex) else data
+                    close = frame["Close"].dropna()
+                    if close.empty:
+                        raise ValueError(f"빈 시세: {symbol}")
+                    out[symbol] = close
+                except (KeyError, ValueError, TypeError) as err:
+                    errors.append({"symbols": [symbol], "error": str(err)[:200]})
+        except Exception as err:
+            errors.append({"symbols": chunk, "error": str(err)[:200]})
+    return out, errors
 
 
-def _return_since(series, rec_date: str) -> float | None:
-    """추천일 이후 종가 기준 수익률. 추천일 데이터가 없으면 None."""
-    after = series[series.index >= rec_date]
-    if len(after) < 2:
+def _series(series):
+    if series is None:
         return None
-    return float(after.iloc[-1]) / float(after.iloc[0]) - 1
+    s = series.copy()
+    if not isinstance(s, pd.Series):
+        raise ValueError("종가가 1차원 Series가 아님")
+    idx = pd.DatetimeIndex(s.index)
+    s.index = idx.tz_localize(None).normalize()
+    if s.index.duplicated().any():
+        raise ValueError("중복 시세 날짜")
+    return pd.to_numeric(s, errors="coerce").sort_index()
 
 
-def build_tracking_section(history_dir: str, today: str) -> tuple[str, str]:
-    """(리포트용 마크다운, AI 프롬프트용 한 줄 요약) 반환."""
-    entries = _load_history(history_dir, today)
-    if not entries:
-        md = ("## 지난 추천 성적표\n\n"
-              "아직 검증할 추천 이력이 없습니다. 추천이 쌓이면 이 섹션에서 "
-              "추천 이후 실제 수익률과 시장 대비 초과수익을 자동 집계합니다.\n")
-        return md, ""
-
-    earliest = min(e["date"] for e in entries)
-    start = (datetime.strptime(earliest, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
-
-    # 시세 수집: KR은 종목별 fdr, US는 벌크, 벤치마크는 시장별 1개
-    us_tickers = sorted({c["ticker"] for e in entries for c in e["candidates"]
-                         if c["market"] == "US"})
-    us_prices = {}
+def evaluate(c, available_at, asof, prices, horizon, cost_bps=20):
+    row = {"market": c["market"], "ticker": c["ticker"], "horizon": horizon,
+           "status": "pending", "return": None, "excess": None, "net_return": None}
+    if not available_at:
+        return {**row, "status": "unknown_publication_time"}
+    import math
+    if not math.isfinite(cost_bps) or not 0 <= cost_bps < 20000:
+        raise ValueError("왕복 비용은 0 이상 20000bp 미만이어야 함")
+    if not isinstance(horizon, int) or horizon <= 0:
+        raise ValueError("보유 거래일은 양의 정수여야 함")
+    sessions = schedule(c["market"], available_at)
+    future = sessions[sessions["open"] > pd.Timestamp(available_at)]
+    if len(future) <= horizon:
+        return {**row, "status": "calendar_out_of_range"}
+    entry, exit_ = future.index[0], future.index[horizon]
+    row.update(entry_date=str(entry.date()), exit_date=str(exit_.date()))
+    if future.iloc[horizon]["close"] > pd.Timestamp(asof):
+        return row
+    symbol, benchmark = price_symbols(c)
+    if symbol is None:
+        return {**row, "status": "unknown_listing_market"}
     try:
-        us_prices = _us_price_series(us_tickers, start)
-    except Exception:
-        pass
-    bench = {}
-    for market, symbol in BENCHMARKS.items():
+        s = _series(prices.get(symbol))
         try:
-            if market == "KR":
-                bench[market] = _kr_price_series(symbol, start)
-            else:
-                bench[market] = _us_price_series([symbol], start).get(symbol)
-        except Exception:
-            bench[market] = None
+            b = _series(prices.get(benchmark))
+        except (ValueError, TypeError):
+            b = None
+        if s is None or not all(d in s.index for d in (entry, exit_)):
+            return {**row, "status": "missing_price"}
+        entry_price, exit_price = float(s.loc[entry]), float(s.loc[exit_])
+        from .quality import positive
+        if not all(positive(v) for v in (entry_price, exit_price)):
+            return {**row, "status": "invalid_price"}
+        ret = exit_price / entry_price - 1
+        row.update(status="ok", entry_price=entry_price, exit_price=exit_price,
+                   return_=ret)
+        row["return"] = row.pop("return_")
+        row["net_return"] = (exit_price * (1-cost_bps/20000)) / (entry_price * (1+cost_bps/20000)) - 1
+        # 같은 진입·청산일의 지수가 없으면 초과수익 계산 보류.
+        if b is not None and all(d in b.index and positive(float(b.loc[d])) for d in (entry, exit_)):
+            row["excess"] = ret - (float(b.loc[exit_]) / float(b.loc[entry]) - 1)
+        else:
+            row["benchmark_status"] = "missing_benchmark"
+        return row
+    except (ValueError, TypeError, KeyError) as err:
+        return {**row, "status": "invalid_series", "error": str(err)}
 
+
+def summarize(rows):
+    ok = [r for r in rows if r["status"] == "ok"]
+    excess = [r["excess"] for r in ok if r["excess"] is not None]
+    values = [r["return"] for r in ok]
+    return {"total": len(rows), "evaluated": len(ok), "excess_n": len(excess),
+            "status_counts": dict(Counter(r["status"] for r in rows)),
+            "mean_return": statistics.mean(values) if values else None,
+            "median_return": statistics.median(values) if values else None,
+            "win_rate": sum(v > 0 for v in values) / len(values) if values else None,
+            "mean_net_return": statistics.mean(r["net_return"] for r in ok) if ok else None,
+            "mean_excess": statistics.mean(excess) if excess else None}
+
+
+def build_evaluation(entries, prices, asof, cost_bps=20):
     rows = []
     for e in entries:
         for c in e["candidates"]:
-            row = {"date": e["date"], **c, "ret": None, "excess": None}
-            try:
-                if c["market"] == "KR":
-                    series = _kr_price_series(c["ticker"], e["date"])
-                else:
-                    series = us_prices.get(c["ticker"])
-                if series is not None:
-                    row["ret"] = _return_since(series, e["date"])
-            except Exception:
-                pass
-            b = bench.get(c["market"])
-            if row["ret"] is not None and b is not None:
-                bench_ret = _return_since(b, e["date"])
-                if bench_ret is not None:
-                    row["excess"] = row["ret"] - bench_ret
-            rows.append(row)
+            for h in HORIZONS:
+                try:
+                    r = evaluate(c, e.get("available_at"), asof, prices, h, cost_bps)
+                except (ValueError, TypeError, KeyError) as err:
+                    r = {"market": c["market"], "ticker": c["ticker"], "horizon": h,
+                         "status": "invalid_history", "return": None, "excess": None,
+                         "net_return": None, "error": str(err)}
+                r.update(date=e["date"], run_id=e.get("run_id", e["date"]),
+                         legacy=e.get("schema_version") != 2, decision=c.get("decision", "unknown"))
+                rows.append(r)
+    groups = {}
+    for cohort in ("quant", "final"):
+        for market in ("KR", "US"):
+            for h in HORIZONS:
+                subset = [r for r in rows if r["horizon"] == h and r["market"] == market and
+                          (cohort == "quant" or (not r["legacy"] and r["decision"] in {"pass", "conditional"}))]
+                groups[f"{cohort}:{market}:{h}"] = summarize(subset)
+    payload = {"strategy_version": STRATEGY_VERSION, "asof": asof,
+               "cost_bps_round_trip": cost_bps, "groups": groups, "rows": rows}
+    payload["evaluation_id"] = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
+    return payload
 
-    today_dt = datetime.strptime(today, "%Y-%m-%d")
-    evaluated = [
-        r for r in rows
-        if r["ret"] is not None
-        and (today_dt - datetime.strptime(r["date"], "%Y-%m-%d")).days >= MIN_EVAL_DAYS
-    ]
 
-    lines = ["## 지난 추천 성적표\n"]
-    summary = ""
-    if evaluated:
-        n = len(evaluated)
-        avg_ret = sum(r["ret"] for r in evaluated) / n * 100
-        win = sum(1 for r in evaluated if r["ret"] > 0) / n * 100
-        with_excess = [r for r in evaluated if r["excess"] is not None]
-        excess_txt = ""
-        if with_excess:
-            avg_excess = sum(r["excess"] for r in with_excess) / len(with_excess) * 100
-            excess_txt = f", 시장(KOSPI·S&P500) 대비 평균 초과수익 {avg_excess:+.1f}%p"
-        summary = (f"추천 후 {MIN_EVAL_DAYS}일 이상 경과한 {n}건 기준: "
-                   f"평균 수익률 {avg_ret:+.1f}%, 승률 {win:.0f}%{excess_txt}")
-        lines.append(summary + "\n")
-    else:
-        lines.append(f"추천 후 {MIN_EVAL_DAYS}일 이상 경과한 건이 아직 없어 "
-                     "집계는 다음 주부터 제공됩니다. 최근 추천의 경과는 아래와 같습니다.\n")
+def _pct(value, suffix="%"):
+    return "미집계" if value is None else f"{value*100:+.2f}{suffix}"
 
-    lines.append("| 추천일 | 종목 | 시장 | 추천가 | 수익률 | 시장 대비 |")
-    lines.append("|---|---|---|---|---|---|")
-    for r in sorted(rows, key=lambda x: x["date"], reverse=True)[:MAX_DETAIL_ROWS]:
-        ret_txt = f"{r['ret'] * 100:+.1f}%" if r["ret"] is not None else "관찰 중"
-        exc_txt = f"{r['excess'] * 100:+.1f}%p" if r["excess"] is not None else "-"
-        lines.append(f"| {r['date']} | {r['name']} ({r['ticker']}) | {r['market']} "
-                     f"| {r['price']:,} | {ret_txt} | {exc_txt} |")
-    lines.append("")
-    lines.append("_수익률은 추천일 이후 첫 거래일 종가에 매수했다고 가정한 종가 기준이며, "
-                 "시장 대비는 같은 기간 시장 지수(KOSPI/S&P500) 수익률을 뺀 값입니다._\n")
-    return "\n".join(lines), summary
+
+def render_evaluation(result):
+    lines = ["## 고정 거래일 성적표", "",
+             f"집계 ID `{result['evaluation_id']}` / 기준 시각 {result['asof']} / 전략 {STRATEGY_VERSION}", "",
+             "| 대상 | 시장 | 보유 거래일 | 전체/평가/초과수익 표본 | 평균 | 중앙값 | 승률 | 비용 차감 평균 | 초과수익 |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    for key, g in result["groups"].items():
+        cohort, market, horizon = key.split(":")
+        lines.append(f"| {'퀀트 후보' if cohort == 'quant' else '최종 추천'} | {market} | {horizon} | "
+                     f"{g['total']}/{g['evaluated']}/{g['excess_n']} | {_pct(g['mean_return'])} | "
+                     f"{_pct(g['median_return'])} | {_pct(g['win_rate'])} | {_pct(g['mean_net_return'])} | {_pct(g['mean_excess'], '%p')} |")
+    lines += ["", "발행 후 시작하는 첫 거래일 종가 진입, 이후 5·20·60거래일 뒤 종가 청산. "
+              "종목과 지수의 진입·청산일을 동일하게 고정한 현지통화 가격수익률(배당 제외)입니다. "
+              f"왕복 비용 {result['cost_bps_round_trip']}bp는 예시 가정이며 벤치마크에는 차감하지 않습니다. "
+              "반복 추천은 각각의 신호로 집계되므로 독립 표본이나 포트폴리오 수익률이 아닙니다.", "",
+              "과거 이력은 발행 시각·최종 판정·한국 상장시장 구분이 없어 추정 복원하지 않습니다.", "",
+              "| 대상 | 시장 | 거래일 | 상태별 건수 |", "|---|---|---|---|"]
+    for key, g in result["groups"].items():
+        cohort, market, h = key.split(":")
+        lines.append(f"| {cohort} | {market} | {h} | {json.dumps(g['status_counts'], ensure_ascii=False)} |")
+    return "\n".join(lines) + "\n"
+
+
+def build_tracking_section(history_dir, today, asof=None):
+    asof = asof or datetime.now(timezone.utc).isoformat()
+    entries, errors = load_history(history_dir, today)
+    symbols = sorted({s for e in entries if e.get("available_at") for c in e["candidates"]
+                      for s in price_symbols(c) if s})
+    start = min((e["date"] for e in entries), default=today)
+    prices, fetch_errors = download_prices(symbols, start, asof) if symbols else ({}, [])
+    result = build_evaluation(entries, prices, asof)
+    result["history_errors"], result["fetch_errors"] = errors, fetch_errors
+    result["data_source"] = "yfinance Close auto_adjust=False; 현금배당 제외"
+    result["history_sha256"] = hashlib.sha256(json.dumps(entries, sort_keys=True).encode()).hexdigest()
+    target = Path(history_dir).parent / "evaluations" / f"{today}-{result['evaluation_id']}.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    price_rows = [{"date": str(pd.Timestamp(d).date()), "symbol": symbol, "close": float(v)}
+                  for symbol, series in sorted(prices.items()) for d, v in series.items()]
+    price_path = target.with_name(target.stem + "-prices.csv")
+    pd.DataFrame(price_rows, columns=["date", "symbol", "close"]).to_csv(price_path, index=False)
+    result["price_file_sha256"] = hashlib.sha256(price_path.read_bytes()).hexdigest()
+    target.write_text(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
+    md = render_evaluation(result)
+    if errors or fetch_errors:
+        md += f"\n수집/이력 오류: {len(errors)} / {len(fetch_errors)}건. 상세는 집계 JSON 참조.\n"
+    # AI에 숫자를 재서술시키지 않는다.
+    return md, ""
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mark-published", required=True)
+    parser.add_argument("--available-at", required=True)
+    parser.add_argument("--url", required=True)
+    args = parser.parse_args()
+    mark_published(args.mark_published, args.available_at, args.url)

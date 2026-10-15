@@ -1,0 +1,10 @@
+{
+  "snapshot_count": 74,
+  "candidate_events": 624,
+  "unique_market_tickers": 60,
+  "repeat_events_after_first": 564,
+  "unknown_publication_snapshots": 74,
+  "unknown_final_decision_events": 624,
+  "history_errors": [],
+  "meaning": "반복 신호는 독립 거래가 아니며, 발행 시각·최종 판정 미상은 추측하지 않음"
+}

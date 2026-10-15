@@ -1,6 +1,7 @@
 """시장 공통 스코어링: 백분위 랭크 기반 가치·모멘텀·종합 점수."""
 
 import time
+import numpy as np
 
 import pandas as pd
 
@@ -19,14 +20,18 @@ def value_score(df: pd.DataFrame) -> pd.Series:
         w["per"] * pctl(1 / df["per"])
         + w["pbr"] * pctl(1 / df["pbr"])
         + w["roe"] * pctl(df["roe"])
-        + w["div"] * pctl(df["div"].fillna(0))
+        + w["div"] * pctl(df["div"])
     )
 
 
 def momentum_features(close: pd.Series, volume: pd.Series) -> dict | None:
     """1년 일봉에서 모멘텀 피처 계산. 데이터가 부족하면 None."""
-    close = close.dropna()
-    volume = volume.reindex(close.index).fillna(0)
+    close = pd.to_numeric(close, errors="coerce").dropna()
+    if not np.isfinite(close).all() or (close <= 0).any() or close.index.duplicated().any():
+        return None
+    volume = pd.to_numeric(volume, errors="coerce").reindex(close.index)
+    if not np.isfinite(volume).all() or (volume < 0).any():
+        return None
     if len(close) < config.MIN_PRICE_ROWS:
         return None
     price = float(close.iloc[-1])
@@ -71,7 +76,10 @@ def with_retry(fn, *args, **kwargs):
     last_err = None
     for attempt in range(config.RETRY_ATTEMPTS):
         try:
-            return fn(*args, **kwargs)
+            result = fn(*args, **kwargs)
+            if hasattr(result, "raise_for_status"):
+                result.raise_for_status()
+            return result
         except Exception as err:  # noqa: BLE001 - 데이터 소스 예외 종류가 제각각이라 광범위 캐치
             last_err = err
             time.sleep(config.RETRY_BACKOFF_SECONDS * (2**attempt))

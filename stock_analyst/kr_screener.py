@@ -14,6 +14,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from . import config
+from .quality import last_completed_session, utc_now
 from .scoring import (
     composite_score,
     momentum_features,
@@ -56,8 +57,11 @@ def _fetch_market(session: requests.Session, sosok: int, market: str) -> pd.Data
         soup = BeautifulSoup(resp.text, "lxml")
         table = soup.select_one("table.type_2")
         if table is None:
-            break
+            raise ValueError(f"네이버 {market} {page}페이지 테이블 없음")
         headers = [th.get_text(strip=True) for th in table.select("tr th")]
+        missing = set(HEADER_MAP) - set(headers)
+        if missing:
+            raise ValueError(f"네이버 {market} 필수 컬럼 누락: {sorted(missing)}")
         page_rows = 0
         for tr in table.select("tr"):
             link = tr.select_one("a.tltle")
@@ -65,7 +69,7 @@ def _fetch_market(session: requests.Session, sosok: int, market: str) -> pd.Data
                 continue
             cells = [td.get_text(strip=True) for td in tr.select("td")]
             if len(cells) != len(headers):
-                continue
+                raise ValueError(f"네이버 {market} 행·헤더 길이 불일치")
             row = {"ticker": link["href"].split("code=")[-1],
                    "name": link.get_text(strip=True), "market": market}
             for header, cell in zip(headers, cells):
@@ -77,6 +81,8 @@ def _fetch_market(session: requests.Session, sosok: int, market: str) -> pd.Data
             page_rows += 1
         if page_rows == 0:
             break
+        if page == MAX_PAGES:
+            raise ValueError(f"네이버 {market} 페이지 상한 도달 — 전체 목록 미확인")
         time.sleep(0.2)  # 페이지당 예의상 지연
     return pd.DataFrame(rows)
 
@@ -84,6 +90,8 @@ def _fetch_market(session: requests.Session, sosok: int, market: str) -> pd.Data
 def screen() -> dict:
     import FinanceDataReader as fdr  # 지연 임포트: --market us 실행 시 불필요한 의존 방지
 
+    collected_at = utc_now()
+    expected = last_completed_session("KR", collected_at)
     session = requests.Session()
     session.headers["User-Agent"] = (
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -109,9 +117,13 @@ def screen() -> dict:
         return {"date": "-", "candidates": [], "scanned": 0,
                 "note": "네이버 금융 데이터 수집 실패"}
     scanned = len(df)
+    listing_counts = {f["market"].iloc[0]: len(f) for f in frames if not f.empty}
+    # 목록 자체의 전체 종목 수를 독립적으로 확인하지 못하므로 두 시장 페이지 완주를 별도 기록한다.
+    quality = {"listing_rows": scanned, "listing_market_count": len(listing_counts),
+               "listing_coverage": 1.0 if len(listing_counts) == 2 else 0.0}
 
     # 쓰레기 필터: 우선주(끝자리 0 아님)·스팩 제외, 적자·극단 밸류·저유동성 제거
-    df = df.dropna(subset=["price", "per", "pbr", "roe", "market_cap_100mn"])
+    df = df.dropna(subset=["price", "per", "pbr", "roe", "market_cap_100mn", "dps"])
     df = df[df["ticker"].str.endswith("0")]
     df = df[~df["name"].str.contains("스팩", na=False)]
     df = df[(df["per"] > 0) & (df["per"] <= config.MAX_PER)]
@@ -119,11 +131,11 @@ def screen() -> dict:
     df = df[df["market_cap_100mn"] * 1e8 >= config.KR_MIN_MARKET_CAP]
     df = df[df["trading_value_mn"].fillna(0) * 1e6 >= config.KR_MIN_TRADING_VALUE]
     df = df[df["roe"] >= config.MIN_ROE_PCT]
-    df["div"] = (df["dps"].fillna(0) / df["price"] * 100).clip(lower=0)
+    df["div"] = (df["dps"] / df["price"] * 100).clip(lower=0)
 
     if df.empty:
         return {"date": "-", "candidates": [], "scanned": scanned,
-                "note": "필터 통과 종목 없음"}
+                "note": "필터 통과 종목 없음", "quality": quality}
 
     # KRX 통합 백분위로 가치 점수 산출 후 상위 종목만 시세 조회
     df["value_score"] = value_score(df)
@@ -132,6 +144,7 @@ def screen() -> dict:
     )
 
     start = (datetime.now() - timedelta(days=380)).strftime("%Y-%m-%d")
+    quality["price_attempted"] = len(df)
     feats = {}
     last_bar = None
     for ticker in df["ticker"]:
@@ -139,12 +152,16 @@ def screen() -> dict:
             ohlcv = with_retry(fdr.DataReader, ticker, start)
         except Exception:
             continue
+        ohlcv = ohlcv.loc[ohlcv.index.strftime("%Y-%m-%d") <= expected]
         f = momentum_features(ohlcv["Close"], ohlcv["Volume"])
         if f:
+            f["price_date"] = str(ohlcv["Close"].dropna().index[-1].date())
             feats[ticker] = f
             idx = ohlcv["Close"].dropna().index[-1]
             if last_bar is None or idx > last_bar:
                 last_bar = idx
+    quality["price_success"] = len(feats)
+    quality["price_coverage"] = len(feats) / quality["price_attempted"] if quality["price_attempted"] else 0
     feat_df = pd.DataFrame.from_dict(feats, orient="index")
     df = df.set_index("ticker").join(feat_df, how="inner", rsuffix="_feat")
     df.index.name = "ticker"
@@ -152,7 +169,7 @@ def screen() -> dict:
 
     if df.empty:
         return {"date": "-", "candidates": [], "scanned": scanned,
-                "note": "시세 조회 실패로 모멘텀 계산 불가"}
+                "note": "시세 조회 실패로 모멘텀 계산 불가", "quality": quality}
 
     df["momentum_score"] = momentum_score(df)
     df["composite_score"] = composite_score(df)
@@ -164,6 +181,12 @@ def screen() -> dict:
             "ticker": row.ticker,
             "name": row.name,
             "market": row.market,
+            "listing_market": row.market,
+            "sector": "",  # 목록 소스는 업종을 제공하지 않아 확인 전 추천 보류
+            "price_date": row.price_date,
+            "price_source": "FinanceDataReader/NAVER",
+            "fundamental_asof": None,
+            "fundamental_collected_at": collected_at,
             "price": round(row.price_feat),  # 일봉 종가 (스냅샷 현재가 대신 기준일 값)
             "per": round(row.per, 1),
             "pbr": round(row.pbr, 2),
@@ -179,4 +202,4 @@ def screen() -> dict:
         }
         for row in df.itertuples()
     ]
-    return {"date": base_date, "candidates": candidates, "scanned": scanned, "note": ""}
+    return {"date": base_date, "candidates": candidates, "scanned": scanned, "note": "", "quality": quality}

@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Regression tests
+        run: python -m unittest discover -s tests -v
+
       - name: Generate report
         id: gen
         run: python -m stock_analyst.main ${{ inputs.dry_run == true && '--dry-run' || '' }}
@@ -42,27 +45,25 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
+      - name: Create issue
+        run: |
+          issue_url=$(gh issue create --title "${{ steps.gen.outputs.report_title }}" --body-file "${{ steps.gen.outputs.report_path }}")
+          published_at=$(gh issue view "$issue_url" --json createdAt --jq .createdAt)
+          python -m stock_analyst.tracking --mark-published "${{ steps.gen.outputs.snapshot_path }}" --available-at "$published_at" --url "$issue_url"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+
       - name: Commit report
-        # 같은 날 재실행 시 이전 리포트 커밋과 충돌하지 않도록, 원격 최신 커밋 위에
-        # 방금 생성한 리포트를 얹는다(생성 산출물은 항상 최신 실행이 이긴다)
+        # 실행별 경로로 기존 보고서를 보존하고 일반 rebase/push로 반영한다.
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin "${{ github.ref_name }}"
-          git reset --soft FETCH_HEAD
           git add reports/
           if git diff --cached --quiet; then
             echo "변경 없음 — 커밋 생략"
             exit 0
           fi
           git commit -m "report: ${{ steps.gen.outputs.report_date }}"
+          git pull --rebase origin "${{ github.ref_name }}"
           git push origin "HEAD:${{ github.ref_name }}"
-
-      - name: Create issue
-        run: >
-          gh issue create
-          --title "${{ steps.gen.outputs.report_title }}"
-          --body-file "${{ steps.gen.outputs.report_path }}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
