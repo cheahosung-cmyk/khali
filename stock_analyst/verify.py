@@ -1,98 +1,110 @@
-"""사전 검증: 추천 후보를 독립 데이터로 교차 확인한다.
-
-퀀트 점수만으로는 "싸 보이는 이유가 있는 종목(가치 함정)"을 거를 수 없으므로,
-확정 추천 전에 (1) 증권사 목표주가 컨센서스 대비 상승여력, (2) 최근 뉴스의
-악재 신호를 수집해 후보에 붙인다. AI 패널은 이 데이터로 종목별
-통과/조건부/탈락 판정을 내린다. 수집은 전부 best-effort — 실패해도
-리포트는 계속 만든다.
-"""
+"""최근 뉴스의 성공·실패·기사 없음과 수집 시각을 명시한다."""
+from datetime import datetime, timedelta, timezone
+import html
+import re
 
 import requests
-
 from .scoring import with_retry
 
 NAVER_API = "https://m.stock.naver.com/api"
 NEWS_PER_TICKER = 5
-RISK_KEYWORDS = [
-    "유상증자", "감자", "소송", "상장폐지", "관리종목", "횡령", "배임",
-    "분식", "감사의견", "회생", "부도", "압수수색", "실적 쇼크", "어닝 쇼크",
-]
+NEWS_MAX_DAYS = 7
+RISK_KEYWORDS = ["유상증자", "감자", "소송", "상장폐지", "관리종목", "횡령", "배임",
+                 "분식", "감사의견", "회생", "부도", "압수수색", "실적 쇼크", "어닝 쇼크",
+                 "lawsuit", "fraud", "bankruptcy", "delisting", "restatement", "investigation",
+                 "default", "offering", "earnings miss"]
 
 
-def _to_float(value) -> float | None:
+def _to_float(value):
     try:
-        return float(str(value).replace(",", ""))
+        import math
+        v = float(str(value).replace(",", ""))
+        return v if math.isfinite(v) else None
     except (TypeError, ValueError):
         return None
 
 
-def _flag_news(titles: list[str]) -> list[str]:
-    flags = []
-    for title in titles:
-        for kw in RISK_KEYWORDS:
-            if kw in title:
-                flags.append(f"뉴스 리스크 의심({kw}): {title}")
-                break
-    return flags
+def _flag_news(titles):
+    return [f"뉴스 리스크 의심: {t}" for t in titles
+            if any(k in t.lower() for k in RISK_KEYWORDS)]
 
 
-def _enrich_kr(candidates: list[dict], session: requests.Session) -> None:
-    for c in candidates:
-        try:
-            data = with_retry(
-                session.get, f"{NAVER_API}/stock/{c['ticker']}/integration",
-                timeout=15,
-            ).json()
-            target = _to_float((data.get("consensusInfo") or {}).get("priceTargetMean"))
-            if target and c["price"]:
-                c["analyst_target_price"] = target
-                c["target_upside_pct"] = round((target / c["price"] - 1) * 100, 1)
-        except Exception:
-            pass
-        try:
-            items = with_retry(
-                session.get, f"{NAVER_API}/news/stock/{c['ticker']}",
-                params={"pageSize": NEWS_PER_TICKER, "page": 1}, timeout=15,
-            ).json()
-            titles = [it["title"] for group in items for it in group.get("items", [])]
-            if titles:
-                c["recent_news"] = titles[:NEWS_PER_TICKER]
-                c["warning_flags"] = _flag_news(titles)
-        except Exception:
-            pass
+def _published(item):
+    value = item.get("pubDate") or item.get("datetime") or item.get("providerPublishTime")
+    if value is None:
+        return None
+    try:
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value, timezone.utc)
+        value = str(value)
+        if re.fullmatch(r"\d{14}", value):
+            from zoneinfo import ZoneInfo
+            return datetime.strptime(value, "%Y%m%d%H%M%S").replace(tzinfo=ZoneInfo("Asia/Seoul"))
+        stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return stamp if stamp.tzinfo else None
+    except (ValueError, TypeError, OverflowError):
+        return None
 
 
-def _enrich_us(candidates: list[dict]) -> None:
-    import yfinance as yf
-
-    for c in candidates:
-        try:
-            info = with_retry(lambda t=c["ticker"]: yf.Ticker(t).info)
-            target = _to_float(info.get("targetMeanPrice"))
-            if target and c["price"]:
-                c["analyst_target_price"] = target
-                c["target_upside_pct"] = round((target / c["price"] - 1) * 100, 1)
-                c["analyst_count"] = info.get("numberOfAnalystOpinions")
-        except Exception:
-            pass
-        try:
-            news = with_retry(lambda t=c["ticker"]: yf.Ticker(t).news)
-            titles = []
-            for it in news or []:
-                title = it.get("title") or (it.get("content") or {}).get("title")
-                if title:
-                    titles.append(title)
-            if titles:
-                c["recent_news"] = titles[:NEWS_PER_TICKER]
-        except Exception:
-            pass
+def _set_news(c, items, now):
+    articles = []
+    for item in items:
+        title = item.get("title")
+        published = _published(item)
+        if title and published and now - timedelta(days=NEWS_MAX_DAYS) <= published <= now:
+            articles.append({"title": html.unescape(re.sub(r"<[^>]+>", "", title)),
+                             "published_at": published.isoformat(),
+                             "url": item.get("url") or item.get("link") or
+                                    (item.get("canonicalUrl") or {}).get("url")})
+    c["news_status"] = "ok" if articles else "empty_or_undated"
+    c["news_articles"] = articles[:NEWS_PER_TICKER]
+    c["recent_news"] = [a["title"] for a in c["news_articles"]]
+    c["warning_flags"] = _flag_news(c["recent_news"])
 
 
-def enrich(kr: dict, us: dict) -> None:
-    """후보 리스트에 검증 데이터를 제자리에서 덧붙인다."""
-    if kr.get("candidates"):
-        session = requests.Session()
-        session.headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64)"
-        _enrich_kr(kr["candidates"], session)
-    if us.get("candidates"):
-        _enrich_us(us["candidates"])
+def enrich(kr, us):
+    now = datetime.now(timezone.utc)
+    session = requests.Session()
+    session.headers["User-Agent"] = "Mozilla/5.0"
+    for market, result in (("KR", kr), ("US", us)):
+        for c in result.get("candidates", []):
+            c.update(news_status="failed", target_status="failed", warning_flags=[],
+                     verification_collected_at=now.isoformat(), event_status="unverified")
+            obj = None
+            if market == "US":
+                try:
+                    import yfinance as yf
+                    obj = yf.Ticker(c["ticker"])
+                    info = with_retry(lambda: obj.info)
+                    target = _to_float(info.get("targetMeanPrice"))
+                    c["analyst_count"] = info.get("numberOfAnalystOpinions")
+                    c["analyst_target_asof"] = None
+                except Exception as err:
+                    c["target_error"] = type(err).__name__
+                    target = None
+            else:
+                try:
+                    info = with_retry(session.get, f"{NAVER_API}/stock/{c['ticker']}/integration",
+                                      timeout=15).json()
+                    target = _to_float((info.get("consensusInfo") or {}).get("priceTargetMean"))
+                    c["analyst_target_asof"] = None
+                except Exception as err:
+                    c["target_error"] = type(err).__name__
+                    target = None
+            if target and c.get("price"):
+                c.update(analyst_target_price=target,
+                         target_upside_pct=round((target / c["price"] - 1) * 100, 1),
+                         target_status="ok_date_unknown")
+            try:
+                if market == "US":
+                    if obj is None:
+                        raise ValueError("Ticker 초기화 실패")
+                    raw = with_retry(lambda: obj.news) or []
+                    items = [it.get("content") or it for it in raw]
+                else:
+                    raw = with_retry(session.get, f"{NAVER_API}/news/stock/{c['ticker']}",
+                                     params={"pageSize": NEWS_PER_TICKER, "page": 1}, timeout=15).json()
+                    items = [it for group in raw for it in group.get("items", [])]
+                _set_news(c, items, now)
+            except Exception as err:
+                c["news_error"] = type(err).__name__

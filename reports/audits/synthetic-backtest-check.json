@@ -1,0 +1,899 @@
+{
+  "asof": "2026-10-15T22:10:00Z",
+  "price_file_sha256": "c258de3e18516a2d1d5ad1c2e053a3f499bedf45c044a29b6c3d23d926170910",
+  "history_errors": [],
+  "history_sha256": "5d6aa8035355a0e80da7eecb18ac209f0d71d075cf4a91734d28f4499842958a",
+  "scenarios_round_trip_bps": {
+    "0": {
+      "all_signals": {
+        "quant:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:5": {
+          "total": 2,
+          "evaluated": 2,
+          "excess_n": 2,
+          "status_counts": {
+            "ok": 2
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.10000000000000009,
+          "mean_excess": 0.050000000000000044
+        },
+        "quant:US:20": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:60": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:5": {
+          "total": 1,
+          "evaluated": 1,
+          "excess_n": 1,
+          "status_counts": {
+            "ok": 1
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.10000000000000009,
+          "mean_excess": 0.050000000000000044
+        },
+        "final:US:20": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:60": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        }
+      },
+      "no_overlap": {
+        "quant:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:5": {
+          "total": 2,
+          "evaluated": 1,
+          "excess_n": 1,
+          "status_counts": {
+            "ok": 1,
+            "overlap_excluded": 1
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.10000000000000009,
+          "mean_excess": 0.050000000000000044
+        },
+        "quant:US:20": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:60": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:5": {
+          "total": 1,
+          "evaluated": 1,
+          "excess_n": 1,
+          "status_counts": {
+            "ok": 1
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.10000000000000009,
+          "mean_excess": 0.050000000000000044
+        },
+        "final:US:20": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:60": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        }
+      }
+    },
+    "20": {
+      "all_signals": {
+        "quant:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:5": {
+          "total": 2,
+          "evaluated": 2,
+          "excess_n": 2,
+          "status_counts": {
+            "ok": 2
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.0978021978021979,
+          "mean_excess": 0.050000000000000044
+        },
+        "quant:US:20": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:60": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:5": {
+          "total": 1,
+          "evaluated": 1,
+          "excess_n": 1,
+          "status_counts": {
+            "ok": 1
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.0978021978021979,
+          "mean_excess": 0.050000000000000044
+        },
+        "final:US:20": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:60": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        }
+      },
+      "no_overlap": {
+        "quant:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:5": {
+          "total": 2,
+          "evaluated": 1,
+          "excess_n": 1,
+          "status_counts": {
+            "ok": 1,
+            "overlap_excluded": 1
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.0978021978021979,
+          "mean_excess": 0.050000000000000044
+        },
+        "quant:US:20": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:60": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:5": {
+          "total": 1,
+          "evaluated": 1,
+          "excess_n": 1,
+          "status_counts": {
+            "ok": 1
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.0978021978021979,
+          "mean_excess": 0.050000000000000044
+        },
+        "final:US:20": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:60": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        }
+      }
+    },
+    "50": {
+      "all_signals": {
+        "quant:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:5": {
+          "total": 2,
+          "evaluated": 2,
+          "excess_n": 2,
+          "status_counts": {
+            "ok": 2
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.0945137157107232,
+          "mean_excess": 0.050000000000000044
+        },
+        "quant:US:20": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:60": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:5": {
+          "total": 1,
+          "evaluated": 1,
+          "excess_n": 1,
+          "status_counts": {
+            "ok": 1
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.0945137157107232,
+          "mean_excess": 0.050000000000000044
+        },
+        "final:US:20": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:60": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        }
+      },
+      "no_overlap": {
+        "quant:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:5": {
+          "total": 2,
+          "evaluated": 1,
+          "excess_n": 1,
+          "status_counts": {
+            "ok": 1,
+            "overlap_excluded": 1
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.0945137157107232,
+          "mean_excess": 0.050000000000000044
+        },
+        "quant:US:20": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "quant:US:60": {
+          "total": 2,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 2
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:5": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:20": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:KR:60": {
+          "total": 0,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {},
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:5": {
+          "total": 1,
+          "evaluated": 1,
+          "excess_n": 1,
+          "status_counts": {
+            "ok": 1
+          },
+          "mean_return": 0.10000000000000009,
+          "median_return": 0.10000000000000009,
+          "win_rate": 1.0,
+          "mean_net_return": 0.0945137157107232,
+          "mean_excess": 0.050000000000000044
+        },
+        "final:US:20": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        },
+        "final:US:60": {
+          "total": 1,
+          "evaluated": 0,
+          "excess_n": 0,
+          "status_counts": {
+            "pending": 1
+          },
+          "mean_return": null,
+          "median_return": null,
+          "win_rate": null,
+          "mean_net_return": null,
+          "mean_excess": null
+        }
+      }
+    }
+  },
+  "limitations": [
+    "신호별 성과이며 포트폴리오 수익률·최대낙폭이 아님",
+    "발행 시각 미상 과거 이력은 성과 미집계",
+    "당시 재무·뉴스·상장폐지 시세가 없으면 점수 변경·뉴스 필터의 과거 효과 검증 불가",
+    "배당·환율 미포함 가격수익률, 분할 등 기업행위는 입력 시세에서 검증 필요"
+  ]
+}

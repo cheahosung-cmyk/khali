@@ -4,7 +4,7 @@
     python -m stock_analyst.main [--dry-run] [--market kr|us|all] [--out-dir reports]
 
 한 시장의 수집 실패가 전체 실행을 죽이지 않도록 시장별로 격리하고,
-리포트를 reports/YYYY-MM-DD.md로 저장한 뒤 GitHub Actions 출력 변수
+리포트를 reports/runs/에 실행별로 저장한 뒤 GitHub Actions 출력 변수
 (report_path, report_title, report_date)를 내보낸다.
 """
 
@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .report import build_report
+from .quality import apply_gates, utc_now
 
 KST = timezone(timedelta(hours=9))
 
@@ -25,9 +26,9 @@ def _run_market(label: str, screen_fn) -> dict:
         print(f"[info] {label}: {result['scanned']:,}개 스캔, "
               f"후보 {len(result['candidates'])}개 (기준일 {result['date']})")
         return result
-    except Exception:
+    except Exception as err:
         traceback.print_exc()
-        return {"date": "-", "candidates": [], "scanned": 0,
+        return {"collection_error": f"{type(err).__name__}: {str(err)[:300]}", "date": "-", "candidates": [], "scanned": 0,
                 "note": f"{label} 데이터 수집 실패 — 소스 오류"}
 
 
@@ -40,8 +41,8 @@ def main() -> None:
     args = parser.parse_args()
 
     empty = {"date": "-", "candidates": [], "scanned": 0, "note": "이번 실행에서 제외"}
-    kr = empty
-    us = empty
+    kr = {**empty, "candidates": []}
+    us = {**empty, "candidates": []}
     if args.market in ("kr", "all"):
         from . import kr_screener
         kr = _run_market("한국", kr_screener.screen)
@@ -69,21 +70,25 @@ def main() -> None:
     except Exception:
         traceback.print_exc()
 
+    if not tracking_md:
+        tracking_md = "## 고정 거래일 성적표\n\n성과 집계 실패 — 성과 수치를 표시하지 않습니다.\n"
+
+    apply_gates(kr, us, utc_now())
+
     markdown = build_report(kr, us, report_date, dry_run=args.dry_run,
                             tracking_md=tracking_md, track_summary=track_summary)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{report_date}.md"
+    run_stamp = datetime.now(KST).strftime("%H%M%S%f")
+    out_path = out_dir / "runs" / f"{report_date}-{run_stamp}.md"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(markdown, encoding="utf-8")
     print(f"[info] 리포트 저장: {out_path}")
 
-    # 오늘의 추천을 검증용 기록으로 저장
-    try:
-        from . import tracking
-        tracking.save_snapshot(history_dir, report_date, kr, us)
-    except Exception:
-        traceback.print_exc()
+    # 이력 저장 실패 시 게시하지 않는다. 성적표 없는 추천 이력을 만들지 않음.
+    from . import tracking
+    snapshot_path = tracking.save_snapshot(history_dir, report_date, kr, us)
 
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
@@ -91,6 +96,7 @@ def main() -> None:
             fh.write(f"report_path={out_path}\n")
             fh.write(f"report_title=주식 분석 리포트 {report_date}\n")
             fh.write(f"report_date={report_date}\n")
+            fh.write(f"snapshot_path={snapshot_path}\n")
 
 
 if __name__ == "__main__":
